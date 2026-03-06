@@ -44,6 +44,20 @@ const handleCheckUpdate = async () => {
   }
 };
 
+const handleDownloadUpdate = async () => {
+  await downloadUpdate();
+  if (error.value) {
+    toast.error(error.value);
+  }
+};
+
+const handleInstallAndRestart = async () => {
+  await installAndRestart();
+  if (error.value) {
+    toast.error(error.value);
+  }
+};
+
 // Apply theme to document
 const applyTheme = (mode: ThemeMode) => {
   let effectiveTheme: "light" | "dark";
@@ -160,7 +174,7 @@ onMounted(async () => {
           <button
             v-if="!downloading"
             class="primary"
-            @click="downloadUpdate"
+            @click="handleDownloadUpdate"
           >
             {{ t("settings.update.downloadAndInstall") }}
           </button>
@@ -178,7 +192,7 @@ onMounted(async () => {
         <!-- Download complete -->
         <div v-if="downloaded" class="download-complete">
           <span class="complete-message">{{ t("settings.update.installAndRestart") }}</span>
-          <button class="primary" @click="installAndRestart">
+          <button class="primary" @click="handleInstallAndRestart">
             {{ t("settings.update.installAndRestart") }}
           </button>
         </div>

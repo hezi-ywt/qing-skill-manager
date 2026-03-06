@@ -3,8 +3,10 @@ import { ref, onMounted } from 'vue';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { useI18n } from 'vue-i18n';
+import { useToast } from '../composables/useToast';
 
 const { t } = useI18n();
+const toast = useToast();
 const updateAvailable = ref(false);
 const latestVersion = ref('');
 const updating = ref(false);
@@ -31,6 +33,7 @@ async function startUpdate() {
       await relaunch();
     } catch (e) {
       console.error('Update install failed', e);
+      toast.error(e instanceof Error ? e.message : String(e));
       updating.value = false;
     }
   }
