@@ -112,18 +112,30 @@ fn collect_ide_skills(
             Ok(metadata) => metadata,
             Err(_) => continue,
         };
-        let file_type = metadata.file_type();
-        if !file_type.is_dir() && !file_type.is_symlink() {
-            continue;
-        }
-        let skill_dir = path.as_path();
-        if !skill_dir.join("SKILL.md").exists() {
+        let link_target = fs::read_link(&path).ok();
+        if !metadata.is_dir() && link_target.is_none() {
             continue;
         }
 
-        let (name, _) = read_skill_metadata(skill_dir);
+        let skill_dir = path.as_path();
+        let has_skill_file = skill_dir.join("SKILL.md").exists();
+        if !has_skill_file && link_target.is_none() {
+            continue;
+        }
+
+        let name = if has_skill_file {
+            read_skill_metadata(skill_dir).0
+        } else {
+            skill_dir
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("skill")
+                .to_string()
+        };
+
         let path = skill_dir.to_path_buf();
-        let source = if let Ok(link_target) = fs::read_link(&path) {
+        let mut managed = false;
+        let source = if let Some(link_target) = link_target {
             let absolute_target = if link_target.is_relative() {
                 if let Some(parent) = path.parent() {
                     parent.join(&link_target)
@@ -133,9 +145,11 @@ fn collect_ide_skills(
             } else {
                 link_target
             };
+
             if let Some(target) = resolve_canonical(&absolute_target) {
                 for (manager_path, idx) in manager_map {
                     if *manager_path == target {
+                        managed = true;
                         if let Some(skill) = manager_skills.get_mut(*idx) {
                             if !skill.used_by.contains(&ide_label.to_string()) {
                                 skill.used_by.push(ide_label.to_string());
@@ -156,7 +170,7 @@ fn collect_ide_skills(
             path: path.display().to_string(),
             ide: ide_label.to_string(),
             source: source.to_string(),
-            managed: source == "link",
+            managed,
         });
     }
 
@@ -179,9 +193,9 @@ fn remove_path(path: &Path) -> Result<(), String> {
 }
 
 fn is_symlink_to(path: &Path, target: &Path) -> bool {
-    match fs::read_link(path) {
-        Ok(link) => link == target,
-        Err(_) => false,
+    match (resolve_canonical(path), resolve_canonical(target)) {
+        (Some(link_target), Some(expected_target)) => link_target == expected_target,
+        _ => false,
     }
 }
 
@@ -200,49 +214,59 @@ fn create_symlink_dir(target: &Path, link: &Path) -> Result<(), String> {
 fn create_junction_dir(target: &Path, link: &Path) -> Result<(), String> {
     use std::process::Command;
 
-    fn validate_path(path: &Path) -> Result<(), String> {
-        let path_str = path.to_string_lossy();
+    fn to_cmd_path(path: &Path) -> String {
+        path.to_string_lossy().replace('/', "\\")
+    }
+
+    fn validate_path(path: &str) -> Result<(), String> {
         let dangerous_chars = ['|', '^', '<', '>', '%', '!', '"', '&', '(', ')', ';'];
         for ch in dangerous_chars {
-            if path_str.contains(ch) {
+            if path.contains(ch) {
                 return Err(format!("Path contains dangerous character: '{}'", ch));
             }
         }
         Ok(())
     }
 
-    validate_path(target)?;
-    validate_path(link)?;
+    let target = to_cmd_path(target);
+    let link = to_cmd_path(link);
 
-    let status = Command::new("cmd")
-        .args([
-            "/C",
-            "mklink",
-            "/J",
-            link.to_string_lossy().as_ref(),
-            target.to_string_lossy().as_ref(),
-        ])
-        .status()
+    validate_path(&target)?;
+    validate_path(&link)?;
+
+    let output = Command::new("cmd")
+        .args(["/C", "mklink", "/J", &link, &target])
+        .output()
         .map_err(|err| err.to_string())?;
-    if status.success() {
+    if output.status.success() {
         Ok(())
     } else {
-        Err("mklink /J failed".to_string())
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let detail = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            "unknown error".to_string()
+        };
+        Err(format!("mklink /J failed: {}", detail))
     }
 }
 
 #[tauri::command]
 pub fn link_local_skill(request: LinkRequest) -> Result<InstallResult, String> {
-    let home = dirs::home_dir().ok_or("无法获取用户目录")?;
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
     let normalized_home = normalize_path(&home);
     let manager_root_raw = home.join(".skills-manager/skills");
-    let manager_root = fs::canonicalize(&manager_root_raw).unwrap_or_else(|_| normalize_path(&manager_root_raw));
+    let manager_root =
+        resolve_canonical(&manager_root_raw).unwrap_or_else(|| normalize_path(&manager_root_raw));
 
     let skill_path = PathBuf::from(&request.skill_path);
-    let skill_canon =
-        fs::canonicalize(&skill_path).map_err(|_| "本地 skill 路径不存在".to_string())?;
+    let skill_canon = resolve_canonical(&skill_path)
+        .ok_or_else(|| "Local skill path does not exist".to_string())?;
     if !skill_canon.starts_with(&manager_root) {
-        return Err("本地 skill 路径必须位于 Skills Manager 本地仓库".to_string());
+        return Err("Local skill path must stay inside Skills Manager storage".to_string());
     }
     let skill_path = skill_canon;
 
@@ -255,43 +279,67 @@ pub fn link_local_skill(request: LinkRequest) -> Result<InstallResult, String> {
         let target_base = PathBuf::from(&target.path);
         let normalized_target = normalize_path(&target_base);
         if !normalized_target.starts_with(&normalized_home) {
-            return Err(format!("目标目录超出用户目录：{}", target.name));
+            return Err(format!(
+                "Target directory is outside the home directory: {}",
+                target.name
+            ));
         }
-        // 对每个目标路径进行符号链接攻击防护验证
-        let target_canon = fs::canonicalize(&target_base).unwrap_or_else(|_| normalized_target.clone());
+
+        // Normalize resolved paths before comparison so Windows verbatim prefixes do not
+        // trigger false-positive symlink attack errors.
+        let target_canon =
+            resolve_canonical(&target_base).unwrap_or_else(|| normalized_target.clone());
         if !target_canon.starts_with(&normalized_home) {
-            return Err(format!("目标目录存在符号链接攻击风险：{}", target.name));
+            return Err(format!(
+                "Target directory failed the symlink safety check: {}",
+                target.name
+            ));
         }
 
         fs::create_dir_all(&target_base).map_err(|err| err.to_string())?;
         let link_path = target_base.join(&safe_name);
 
-        if link_path.exists() {
+        if fs::symlink_metadata(&link_path).is_ok() {
             if is_symlink_to(&link_path, &skill_path) {
-                skipped.push(format!("{}: 已链接", target.name));
+                skipped.push(format!("{}: already linked", target.name));
                 continue;
             }
-            skipped.push(format!("{}: 目标已存在", target.name));
+            skipped.push(format!("{}: target already exists", target.name));
             continue;
         }
 
         let mut linked_done = false;
-        if create_symlink_dir(&skill_path, &link_path).is_ok() {
-            linked.push(format!("{}: {}", target.name, link_path.display()));
-            linked_done = true;
+        let mut link_errors = Vec::new();
+
+        match create_symlink_dir(&skill_path, &link_path) {
+            Ok(()) => {
+                linked.push(format!("{}: {}", target.name, link_path.display()));
+                linked_done = true;
+            }
+            Err(err) => link_errors.push(format!("symlink: {}", err)),
         }
 
         #[cfg(target_family = "windows")]
         if !linked_done {
-            if create_junction_dir(&skill_path, &link_path).is_ok() {
-                linked.push(format!("{}: junction {}", target.name, link_path.display()));
-                linked_done = true;
+            match create_junction_dir(&skill_path, &link_path) {
+                Ok(()) => {
+                    linked.push(format!("{}: junction {}", target.name, link_path.display()));
+                    linked_done = true;
+                }
+                Err(err) => link_errors.push(format!("junction: {}", err)),
             }
         }
 
         if !linked_done {
-            copy_dir_recursive(&skill_path, &link_path)?;
-            linked.push(format!("{}: copy {}", target.name, link_path.display()));
+            let detail = if link_errors.is_empty() {
+                "unknown error".to_string()
+            } else {
+                link_errors.join("; ")
+            };
+            return Err(format!(
+                "Failed to create a link for {} in {}: {}",
+                request.skill_name, target.name, detail
+            ));
         }
     }
 
@@ -304,7 +352,7 @@ pub fn link_local_skill(request: LinkRequest) -> Result<InstallResult, String> {
 
 #[tauri::command]
 pub fn scan_overview(request: LocalScanRequest) -> Result<Overview, String> {
-    let home = dirs::home_dir().ok_or("无法获取用户目录")?;
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
 
     let manager_dir = home.join(".skills-manager/skills");
     let mut manager_skills = collect_skills_from_dir(&manager_dir, "manager", None);
@@ -331,7 +379,7 @@ pub fn scan_overview(request: LocalScanRequest) -> Result<Overview, String> {
             .iter()
             .map(|item| {
                 if !is_safe_relative_dir(&item.relative_dir) {
-                    return Err(format!("IDE 目录非法：{}", item.label));
+                    return Err(format!("Invalid IDE directory: {}", item.label));
                 }
                 Ok((item.label.clone(), item.relative_dir.clone()))
             })
@@ -378,7 +426,7 @@ pub fn scan_overview(request: LocalScanRequest) -> Result<Overview, String> {
 
 #[tauri::command]
 pub fn uninstall_skill(request: UninstallRequest) -> Result<String, String> {
-    let home = dirs::home_dir().ok_or("无法获取用户目录")?;
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
     let mut allowed_roots = vec![home.join(".skills-manager/skills")];
 
     let ide_dirs = if request.ide_dirs.is_empty() {
@@ -404,7 +452,7 @@ pub fn uninstall_skill(request: UninstallRequest) -> Result<String, String> {
 
     for rel in ide_dirs {
         if !is_safe_relative_dir(&rel) {
-            return Err("IDE 目录非法".to_string());
+            return Err("Invalid IDE directory".to_string());
         }
         allowed_roots.push(home.join(rel));
     }
@@ -418,16 +466,16 @@ pub fn uninstall_skill(request: UninstallRequest) -> Result<String, String> {
 
     let target = PathBuf::from(&request.target_path);
     let parent = target.parent().unwrap_or(Path::new(&request.target_path));
-    let parent_canon = fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf());
+    let parent_canon = resolve_canonical(parent).unwrap_or_else(|| normalize_path(parent));
     let allowed_roots_canon: Vec<PathBuf> = allowed_roots
         .iter()
-        .map(|root| fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()))
+        .map(|root| resolve_canonical(root).unwrap_or_else(|| normalize_path(root)))
         .collect();
     let allowed = allowed_roots_canon
         .iter()
         .any(|root| parent_canon.starts_with(root));
     if !allowed {
-        return Err("目标路径不在允许范围内".to_string());
+        return Err("Target path is outside the allowed directories".to_string());
     }
 
     let metadata = fs::symlink_metadata(&target).map_err(|err| err.to_string())?;
@@ -437,25 +485,25 @@ pub fn uninstall_skill(request: UninstallRequest) -> Result<String, String> {
         } else {
             fs::remove_file(&target).map_err(|err| err.to_string())?;
         }
-        return Ok("已移除链接".to_string());
+        return Ok("Link removed".to_string());
     }
 
     fs::remove_dir_all(&target).map_err(|err| err.to_string())?;
-    Ok("已卸载目录".to_string())
+    Ok("Directory removed".to_string())
 }
 
 #[tauri::command]
 pub fn import_local_skill(request: ImportRequest) -> Result<String, String> {
-    let home = dirs::home_dir().ok_or("无法获取用户目录")?;
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
     let manager_dir = home.join(".skills-manager/skills");
 
     let source_path = PathBuf::from(&request.source_path);
     if !source_path.exists() {
-        return Err("源路径不存在".to_string());
+        return Err("Source path does not exist".to_string());
     }
 
     if !source_path.join("SKILL.md").exists() {
-        return Err("该目录下缺少 SKILL.md 文件，不是有效的 Skill".to_string());
+        return Err("The selected directory does not contain SKILL.md".to_string());
     }
 
     let (name, _) = read_skill_metadata(&source_path);
@@ -463,96 +511,132 @@ pub fn import_local_skill(request: ImportRequest) -> Result<String, String> {
     let target_dir = manager_dir.join(&safe_name);
 
     if target_dir.exists() {
-        return Err(format!("目标 Skill 已存在：{}", safe_name));
+        return Err(format!("Target skill already exists: {}", safe_name));
     }
 
     fs::create_dir_all(&target_dir).map_err(|err| err.to_string())?;
     copy_dir_recursive(&source_path, &target_dir)?;
 
-    Ok(format!("已导入 Skill: {}", name))
+    Ok(format!("Imported skill: {}", name))
 }
 
 #[tauri::command]
 pub fn adopt_ide_skill(request: AdoptIdeSkillRequest) -> Result<String, String> {
-    let home = dirs::home_dir().ok_or("无法获取用户目录")?;
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory".to_string())?;
     let normalized_home = normalize_path(&home);
     let manager_root = home.join(".skills-manager/skills");
     fs::create_dir_all(&manager_root).map_err(|err| err.to_string())?;
 
     let target = PathBuf::from(&request.target_path);
-    let target_canon = fs::canonicalize(&target).map_err(|_| "IDE Skill 路径不存在".to_string())?;
-    if !target_canon.starts_with(&normalized_home) {
-        return Err("IDE Skill 路径必须位于用户目录下".to_string());
-    }
-    if !target_canon.join("SKILL.md").exists() {
-        return Err("目标目录缺少 SKILL.md，无法纳入统一管理".to_string());
+    let normalized_target = normalize_path(&target);
+    if !normalized_target.starts_with(&normalized_home) {
+        return Err("IDE skill path must stay inside the home directory".to_string());
     }
 
-    let (name, _) = read_skill_metadata(&target_canon);
+    fs::symlink_metadata(&target).map_err(|_| "IDE skill path does not exist".to_string())?;
+    let target_canon = resolve_canonical(&target);
+
+    let (name, has_skill_file) = if let Some(path) = target_canon.as_ref() {
+        (read_skill_metadata(path).0, path.join("SKILL.md").exists())
+    } else {
+        (
+            target
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("skill")
+                .to_string(),
+            false,
+        )
+    };
+
     let safe_name = sanitize_dir_name(&name);
     let manager_target = manager_root.join(&safe_name);
 
     if manager_target.exists() {
-        let manager_canon = fs::canonicalize(&manager_target).map_err(|err| err.to_string())?;
-        if manager_canon == target_canon {
-            return Ok(format!("{} 已在统一管理目录中", name));
+        let manager_canon = resolve_canonical(&manager_target)
+            .ok_or_else(|| "Managed skill path does not exist".to_string())?;
+        if target_canon
+            .as_ref()
+            .is_some_and(|target_path| *target_path == manager_canon)
+        {
+            return Ok(format!("{} is already managed", name));
         }
     } else {
-        copy_dir_recursive(&target_canon, &manager_target)?;
+        let source_dir = target_canon
+            .as_ref()
+            .ok_or_else(|| "IDE skill path does not exist".to_string())?;
+        if !has_skill_file {
+            return Err("Target directory does not contain SKILL.md".to_string());
+        }
+        copy_dir_recursive(source_dir, &manager_target)?;
     }
 
-    remove_path(&target_canon)?;
+    remove_path(&target)?;
 
     let mut linked_done = false;
-    if create_symlink_dir(&manager_target, &target).is_ok() {
-        linked_done = true;
+    let mut link_errors = Vec::new();
+
+    match create_symlink_dir(&manager_target, &target) {
+        Ok(()) => linked_done = true,
+        Err(err) => link_errors.push(format!("symlink: {}", err)),
     }
 
     #[cfg(target_family = "windows")]
     if !linked_done {
-        if create_junction_dir(&manager_target, &target).is_ok() {
-            linked_done = true;
+        match create_junction_dir(&manager_target, &target) {
+            Ok(()) => linked_done = true,
+            Err(err) => link_errors.push(format!("junction: {}", err)),
         }
     }
 
     if !linked_done {
         copy_dir_recursive(&manager_target, &target)?;
+        let detail = if link_errors.is_empty() {
+            "unknown error".to_string()
+        } else {
+            link_errors.join("; ")
+        };
+        return Err(format!(
+            "Managed {} in Skills Manager, but failed to create a link for {}. Restored a local copy instead. {}",
+            name, request.ide_label, detail
+        ));
     }
 
     Ok(format!(
-        "已将 {} 纳入统一管理，并重新关联到 {}",
+        "Managed {} and re-linked it to {}",
         name, request.ide_label
     ))
 }
 
 #[tauri::command]
 pub fn delete_local_skills(request: DeleteLocalSkillRequest) -> Result<String, String> {
-    let home = dirs::home_dir().ok_or("无法获取用户目录")?;
-    let manager_root = fs::canonicalize(home.join(".skills-manager/skills"))
-        .unwrap_or_else(|_| home.join(".skills-manager/skills"));
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let manager_root = resolve_canonical(&home.join(".skills-manager/skills"))
+        .unwrap_or_else(|| normalize_path(&home.join(".skills-manager/skills")));
 
     if request.target_paths.is_empty() {
-        return Err("未提供待删除的 Skill".to_string());
+        return Err("No skills were provided for deletion".to_string());
     }
 
     let mut deleted = 0usize;
 
     for raw_path in request.target_paths {
         let target = PathBuf::from(&raw_path);
-        let canonical = fs::canonicalize(&target).map_err(|_| "目标 Skill 不存在".to_string())?;
+        let canonical =
+            resolve_canonical(&target).ok_or_else(|| "Target skill does not exist".to_string())?;
         if !canonical.starts_with(&manager_root) {
-            return Err("仅允许删除 Skills Manager 本地 Skill".to_string());
+            return Err("Only Skills Manager local skills can be deleted".to_string());
         }
         if canonical == manager_root {
-            return Err("不允许删除 Skills 根目录".to_string());
+            return Err("Refusing to delete the skills root directory".to_string());
         }
         if !canonical.join("SKILL.md").exists() {
-            return Err("目标目录缺少 SKILL.md，已拒绝删除".to_string());
+            return Err("Refusing to delete a directory without SKILL.md".to_string());
         }
 
         fs::remove_dir_all(&canonical).map_err(|err| err.to_string())?;
         deleted += 1;
     }
 
-    Ok(format!("已删除 {} 个 Skill", deleted))
+    Ok(format!("Deleted {} skills", deleted))
 }

@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { invoke } from "@tauri-apps/api/core";
-import { homeDir, join } from "@tauri-apps/api/path";
+import { dirname, homeDir, join } from "@tauri-apps/api/path";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useToast } from "./useToast";
 import type {
@@ -407,7 +407,7 @@ export function useSkillsManager() {
     uninstallMode.value = "ide";
     uninstallTargetPath.value = targetPath;
     uninstallTargetPaths.value = [targetPath];
-    uninstallTargetName.value = targetPath.split("/").pop() || targetPath;
+    uninstallTargetName.value = targetPath.split(/[\\/]/).pop() || targetPath;
     showUninstallModal.value = true;
   }
 
@@ -523,7 +523,17 @@ export function useSkillsManager() {
     try {
       await revealItemInDir(path);
     } catch (err) {
-      toast.error(getErrorMessage(err, t("errors.openDirFailed")));
+      const message = getErrorMessage(err, t("errors.openDirFailed"));
+      if (message.includes("os error 2") || message.toLowerCase().includes("cannot find the file")) {
+        try {
+          await revealItemInDir(await dirname(path));
+          toast.error(t("errors.openDirFailed") + ": " + path);
+          return;
+        } catch {
+          // Fall through to the original error below.
+        }
+      }
+      toast.error(message);
     }
   }
 
