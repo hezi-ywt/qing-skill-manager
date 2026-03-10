@@ -1,16 +1,7 @@
 import { computed, ref } from "vue";
 import type { IdeOption } from "./types";
 import { defaultIdeOptions, STORAGE_KEYS } from "./constants";
-
-function isSafeRelativePath(input: string): boolean {
-  const trimmed = input.trim();
-  if (!trimmed) return false;
-  if (trimmed.startsWith("/") || /^[A-Za-z]:/i.test(trimmed) || trimmed.startsWith("\\")) {
-    return false;
-  }
-  const parts = trimmed.split(/[\\/]+/);
-  return parts.every((part) => part !== ".." && part !== "");
-}
+import { isSafeRelativePath } from "./utils";
 
 /**
  * Load IDE options from localStorage
