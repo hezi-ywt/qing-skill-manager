@@ -98,6 +98,7 @@ export default {
     title: "IDE 浏览",
     switchHint: "切换 IDE 查看其技能列表。",
     total: "当前列表 {count}",
+    selectAll: "全选",
     addHint: "添加自定义 IDE（名称 + 相对路径或绝对路径）。",
     namePlaceholder: "IDE 名称",
     dirPlaceholder: "例如 .myide/skills",
@@ -110,7 +111,9 @@ export default {
     unmanaged: "未托管",
     openDir: "打开目录",
     adopt: "纳入统一管理",
-    uninstall: "卸载"
+    uninstall: "卸载",
+    uninstallSelected: "卸载选中 ({count})",
+    uninstallSelectedCount: "已选择 {count} 个技能"
   },
   installModal: {
     title: "选择安装目标 IDE",
@@ -137,6 +140,8 @@ export default {
     installed: "已安装至 {ide}",
     installing: "正在安装...",
     uninstalling: "正在卸载...",
+    uninstalledCount: "已卸载 {count} 个技能",
+    uninstalledPartial: "成功卸载 {success} 个，失败 {failed} 个",
     deleting: "正在删除...",
     importing: "正在导入...",
     adopting: "正在纳入统一管理...",

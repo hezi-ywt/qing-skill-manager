@@ -403,6 +403,15 @@ export function useSkillsManager() {
     showUninstallModal.value = true;
   }
 
+  function openUninstallManyModal(paths: string[]) {
+    if (paths.length === 0) return;
+    uninstallMode.value = "ide";
+    uninstallTargetPath.value = "";
+    uninstallTargetPaths.value = paths;
+    uninstallTargetName.value = t("ide.uninstallSelectedCount", { count: paths.length });
+    showUninstallModal.value = true;
+  }
+
   function openDeleteLocalModal(targets: LocalSkill[]) {
     uninstallMode.value = "local";
     uninstallTargetPath.value = "";
@@ -416,23 +425,42 @@ export function useSkillsManager() {
     busy.value = true;
     busyText.value = uninstallMode.value === "local" ? t("messages.deleting") : t("messages.uninstalling");
     try {
-      const message = uninstallMode.value === "local"
-        ? ((await invoke("delete_local_skills", {
-            request: {
-              targetPaths: uninstallTargetPaths.value
-            }
-          })) as string)
-        : ((await invoke("uninstall_skill", {
-            request: {
-              targetPath: uninstallTargetPath.value,
-              projectDir: null,
-              ideDirs: ideOptions.value.map((item) => ({
-                label: item.label,
-                relativeDir: item.globalDir
-              }))
-            }
-          })) as string);
-      toast.success(message);
+      if (uninstallMode.value === "local") {
+        const message = ((await invoke("delete_local_skills", {
+          request: {
+            targetPaths: uninstallTargetPaths.value
+          }
+        })) as string);
+        toast.success(message);
+      } else {
+        // IDE mode: uninstall each path
+        let successCount = 0;
+        let failCount = 0;
+        for (const targetPath of uninstallTargetPaths.value) {
+          try {
+            await invoke("uninstall_skill", {
+              request: {
+                targetPath,
+                projectDir: null,
+                ideDirs: ideOptions.value.map((item) => ({
+                  label: item.label,
+                  relativeDir: item.globalDir
+                }))
+              }
+            });
+            successCount++;
+          } catch {
+            failCount++;
+          }
+        }
+        if (successCount > 0 && failCount === 0) {
+          toast.success(t("messages.uninstalledCount", { count: successCount }));
+        } else if (successCount > 0 && failCount > 0) {
+          toast.success(t("messages.uninstalledPartial", { success: successCount, failed: failCount }));
+        } else {
+          toast.error(t("errors.uninstallFailed"));
+        }
+      }
       await scanLocalSkills();
     } catch (err) {
       toast.error(
@@ -605,6 +633,7 @@ export function useSkillsManager() {
     confirmInstallToIde,
     closeInstallModal,
     openUninstallModal,
+    openUninstallManyModal,
     openDeleteLocalModal,
     confirmUninstall,
     cancelUninstall,

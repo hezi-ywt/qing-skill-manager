@@ -98,6 +98,7 @@ export default {
     title: "IDE Browser",
     switchHint: "Switch IDE to view its skills.",
     total: "{count} skills",
+    selectAll: "Select all",
     addHint: "Add custom IDE (name + relative or absolute path).",
     namePlaceholder: "IDE name",
     dirPlaceholder: "e.g. .myide/skills",
@@ -110,7 +111,9 @@ export default {
     unmanaged: "Unmanaged",
     openDir: "Open Folder",
     adopt: "Manage Centrally",
-    uninstall: "Uninstall"
+    uninstall: "Uninstall",
+    uninstallSelected: "Uninstall selected ({count})",
+    uninstallSelectedCount: "{count} skills selected"
   },
   installModal: {
     title: "Select target IDEs",
@@ -137,6 +140,8 @@ export default {
     installed: "Installed to {ide}",
     installing: "Installing...",
     uninstalling: "Uninstalling...",
+    uninstalledCount: "Uninstalled {count} skills",
+    uninstalledPartial: "Successfully uninstalled {success}, failed {failed}",
     deleting: "Deleting...",
     importing: "Importing...",
     adopting: "Adding to central management...",

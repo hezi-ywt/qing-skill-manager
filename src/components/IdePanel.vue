@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { computed, ref, watch } from "vue";
 import type { IdeSkill, IdeOption } from "../composables/types";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
 
-defineProps<{
+const props = defineProps<{
   ideOptions: IdeOption[];
   selectedIdeFilter: string;
   customIdeName: string;
@@ -15,16 +16,58 @@ defineProps<{
   localLoading: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "update:selectedIdeFilter", value: string): void;
   (e: "update:customIdeName", value: string): void;
   (e: "update:customIdeDir", value: string): void;
   (e: "addCustomIde"): void;
   (e: "removeCustomIde", label: string): void;
   (e: "uninstall", path: string): void;
+  (e: "uninstallMany", paths: string[]): void;
   (e: "openDir", path: string): void;
   (e: "adopt", skill: IdeSkill): void;
 }>();
+
+const selectedIds = ref<string[]>([]);
+
+watch(
+  () => props.filteredIdeSkills,
+  (skills) => {
+    const available = new Set(skills.map((skill) => skill.id));
+    selectedIds.value = selectedIds.value.filter((id) => available.has(id));
+  },
+  { deep: true }
+);
+
+const selectedSkills = computed(() =>
+  props.filteredIdeSkills.filter((skill) => selectedIds.value.includes(skill.id))
+);
+
+const allSelected = computed(
+  () =>
+    props.filteredIdeSkills.length > 0 &&
+    props.filteredIdeSkills.every((skill) => selectedIds.value.includes(skill.id))
+);
+
+function toggleSelectAll(checked: boolean) {
+  const filteredIds = props.filteredIdeSkills.map((skill) => skill.id);
+  if (checked) {
+    selectedIds.value = Array.from(new Set([...selectedIds.value, ...filteredIds]));
+    return;
+  }
+  selectedIds.value = selectedIds.value.filter((id) => !filteredIds.includes(id));
+}
+
+function toggleSelected(skillId: string, checked: boolean) {
+  selectedIds.value = checked
+    ? [...selectedIds.value, skillId]
+    : selectedIds.value.filter((id) => id !== skillId);
+}
+
+function uninstallSelected() {
+  if (selectedSkills.value.length === 0) return;
+  emit("uninstallMany", selectedSkills.value.map((skill) => skill.path));
+}
 </script>
 
 <template>
@@ -32,8 +75,17 @@ defineEmits<{
     <div class="panel-title">{{ t("ide.title") }}</div>
     <div class="panel-summary">
       <span>{{ t("ide.total", { count: filteredIdeSkills.length }) }}</span>
-      <div class="hint">{{ t("ide.switchHint") }}</div>
+      <label class="checkbox select-all">
+        <input
+          type="checkbox"
+          :checked="allSelected"
+          :disabled="filteredIdeSkills.length === 0"
+          @change="toggleSelectAll(($event.target as HTMLInputElement).checked)"
+        />
+        {{ t("ide.selectAll") }}
+      </label>
     </div>
+    <div class="hint">{{ t("ide.switchHint") }}</div>
     <div class="ide-filter-grid">
       <button
         v-for="option in ideOptions"
@@ -68,6 +120,18 @@ defineEmits<{
       </div>
     </div>
 
+    <div class="actions">
+      <div class="buttons">
+        <button
+          class="ghost danger"
+          :disabled="selectedSkills.length === 0 || localLoading"
+          @click="uninstallSelected"
+        >
+          {{ t("ide.uninstallSelected", { count: selectedSkills.length }) }}
+        </button>
+      </div>
+    </div>
+
     <div v-if="localLoading" class="hint">{{ t("ide.loading") }}</div>
     <div v-if="!localLoading && filteredIdeSkills.length === 0" class="hint">{{ t("ide.emptyHint") }}</div>
     <div v-if="filteredIdeSkills.length > 0" class="cards">
@@ -78,20 +142,24 @@ defineEmits<{
         :class="{ unmanaged: !skill.managed }"
       >
         <div class="card-header">
-          <div>
-            <div class="card-title-row">
+          <div class="card-title-row">
+            <label class="checkbox card-select">
+              <input
+                type="checkbox"
+                :checked="selectedIds.includes(skill.id)"
+                @change="toggleSelected(skill.id, ($event.target as HTMLInputElement).checked)"
+              />
+            </label>
+            <div>
               <div class="card-title">{{ index + 1 }}. {{ skill.name }}</div>
-              <span v-if="!skill.managed" class="status-badge unmanaged">
-                {{ t("ide.unmanaged") }}
-              </span>
-            </div>
-            <div class="card-meta">
-              {{
-                skill.ide +
-                " · " +
-                (skill.source === "link" ? t("ide.sourceLink") : t("ide.sourceLocal")) +
-                (!skill.managed ? ` · ${t("ide.unmanaged")}` : "")
-              }}
+              <div class="card-meta">
+                {{
+                  skill.ide +
+                  " · " +
+                  (skill.source === "link" ? t("ide.sourceLink") : t("ide.sourceLocal")) +
+                  (!skill.managed ? ` · ${t("ide.unmanaged")}` : "")
+                }}
+              </div>
             </div>
           </div>
           <div class="card-actions">
@@ -118,7 +186,6 @@ defineEmits<{
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  margin-bottom: 12px;
   font-size: 13px;
   color: var(--color-muted);
 }
@@ -151,8 +218,12 @@ defineEmits<{
 .card-title-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.card-select {
+  padding-top: 2px;
 }
 
 .status-badge {
@@ -167,5 +238,16 @@ defineEmits<{
   color: #8a4b00;
   background: rgba(245, 158, 11, 0.16);
   border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.select-all {
+  justify-content: flex-end;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
 }
 </style>

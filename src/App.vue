@@ -91,6 +91,7 @@ const {
   addCustomIde,
   removeCustomIde,
   openUninstallModal,
+  openUninstallManyModal,
   openDeleteLocalModal,
   confirmInstallToIde,
   closeInstallModal,
@@ -240,6 +241,7 @@ const { updateAvailable, checkOnStartup } = useUpdateStore();
           @open-dir="openSkillDirectory"
           @adopt="adoptIdeSkill"
           @uninstall="openUninstallModal"
+          @uninstall-many="openUninstallManyModal"
         />
       </template>
 
