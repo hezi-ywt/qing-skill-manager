@@ -67,7 +67,7 @@ pub fn sanitize_dir_name(name: &str) -> String {
             out.push('-');
         }
     }
-    let result = if out.is_empty() {
+    let mut result = if out.is_empty() {
         "skill".to_string()
     } else {
         out.trim_matches('-').to_string()
