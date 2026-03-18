@@ -4,6 +4,7 @@ export default {
       local: "Local Skills",
       market: "Market",
       ide: "IDE Browser",
+      projects: "Projects",
       settings: "Settings"
     },
     header: {
@@ -117,11 +118,15 @@ export default {
     adoptSelected: "Manage selected ({count})"
   },
   installModal: {
-    title: "Select target IDEs",
-    selectAll: "Select all",
-    cancel: "Cancel",
-    confirm: "Install",
-    needSelect: "Select at least one IDE"
+    selectTargetTitle: "Select Install Target",
+    globalIde: "Global IDE",
+    globalIdeDesc: "Install to global IDE directory, available to all projects",
+    project: "Project",
+    projectDesc: "Install to project directory, available only to this project",
+    noProjects: "No projects",
+    installToIde: "Install to IDE",
+    installToProject: "Install to Project",
+    cancel: "Cancel"
   },
   uninstallModal: {
     title: "Confirm uninstall",
@@ -149,7 +154,8 @@ export default {
     importing: "Importing...",
     adopting: "Adding to central management...",
     handled: "Handled {linked} targets, skipped {skipped} targets.",
-    imported: "Successfully imported {success} skills, failed {failed}."
+    imported: "Successfully imported {success} skills, failed {failed}.",
+    selectSkillsForProject: "Select skills to install for project {name}"
   },
   errors: {
     fillIde: "Please fill in IDE name and directory.",
@@ -166,7 +172,8 @@ export default {
     importFailed: "Import failed.",
     openDirFailed: "Failed to open folder.",
     adoptFailed: "Failed to add to central management.",
-    invalidPath: "Path must be a relative path or a valid absolute path."
+    invalidPath: "Path must be a relative path or a valid absolute path.",
+    projectNoIdeTargets: "Project has no IDE targets configured. Please configure first."
   },
   update: {
     available: "New version available: {version}",
@@ -190,5 +197,33 @@ export default {
     done: "Done",
     error: "Download failed",
     retry: "Retry"
+  },
+  projects: {
+    title: "Projects",
+    hint: "Configure separate Skills environments for different projects.",
+    add: "Add Project",
+    addTitle: "Add New Project",
+    addHint: "Select project folder and enter project name.",
+    pathPlaceholder: "e.g., /Users/name/my-project or C:\\Projects\\my-project",
+    namePlaceholder: "e.g., My Project",
+    remove: "Remove",
+    select: "Select",
+    deselect: "Deselect",
+    configure: "Configure",
+    configureTitle: "Configure Project IDE Targets",
+    linkSkills: "Link Skills",
+    openDirectory: "Open Directory",
+    emptyHint: "No projects yet. Click the button above to add one.",
+    projectPath: "Project Path",
+    projectName: "Project Name",
+    selectIdeTargets: "Select IDE Targets",
+    configureHint: "Select IDEs that this project needs. Skills will be linked to these IDE directories in the project.",
+    cancel: "Cancel",
+    save: "Save",
+    ideTargets: "IDE Targets: {count}",
+    detected: "Detected: {count}",
+    selectFolder: "Select Project Folder",
+    selectFolderButton: "Select Folder",
+    untitled: "Untitled Project"
   }
 };

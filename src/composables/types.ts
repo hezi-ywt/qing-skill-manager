@@ -94,3 +94,23 @@ export type DownloadTask = {
   status: "pending" | "downloading" | "done" | "error";
   error?: string;
 };
+
+/**
+ * IDE directory in a project
+ */
+export type ProjectIdeDir = {
+  label: string;
+  relativeDir: string;
+  absolutePath: string;
+};
+
+/**
+ * Project configuration
+ */
+export type ProjectConfig = {
+  id: string;
+  name: string;
+  path: string;
+  ideTargets: string[];
+  detectedIdeDirs: ProjectIdeDir[];
+};

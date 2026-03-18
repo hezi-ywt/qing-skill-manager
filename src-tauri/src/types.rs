@@ -183,3 +183,24 @@ pub struct AdoptIdeSkillRequest {
     pub target_path: String,
     pub ide_label: String,
 }
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectScanRequest {
+    pub project_dir: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectIdeDir {
+    pub label: String,
+    pub relative_dir: String,
+    pub absolute_path: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectScanResult {
+    pub project_dir: String,
+    pub detected_ide_dirs: Vec<ProjectIdeDir>,
+}

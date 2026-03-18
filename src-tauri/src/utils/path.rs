@@ -33,6 +33,31 @@ pub fn normalize_path(path: &Path) -> PathBuf {
     normalized
 }
 
+/// Windows reserved names that cannot be used as file/directory names
+#[cfg(target_os = "windows")]
+const WINDOWS_RESERVED_NAMES: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL",
+    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// Check if a name is a Windows reserved name
+#[cfg(target_os = "windows")]
+fn is_windows_reserved_name(name: &str) -> bool {
+    let upper = name.to_uppercase();
+    // Check exact match
+    if WINDOWS_RESERVED_NAMES.contains(&upper.as_str()) {
+        return true;
+    }
+    // Check with extension (e.g., CON.txt, NUL.md)
+    if let Some(base) = upper.split('.').next() {
+        if WINDOWS_RESERVED_NAMES.contains(&base) {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn sanitize_dir_name(name: &str) -> String {
     let mut out = String::new();
     for ch in name.chars() {
@@ -42,11 +67,19 @@ pub fn sanitize_dir_name(name: &str) -> String {
             out.push('-');
         }
     }
-    if out.is_empty() {
+    let result = if out.is_empty() {
         "skill".to_string()
     } else {
         out.trim_matches('-').to_string()
+    };
+
+    // Windows reserved names check - prefix with underscore to make it safe
+    #[cfg(target_os = "windows")]
+    if is_windows_reserved_name(&result) {
+        result = format!("_{}", result);
     }
+
+    result
 }
 
 pub fn resolve_canonical(path: &Path) -> Option<PathBuf> {

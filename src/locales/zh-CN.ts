@@ -4,6 +4,7 @@ export default {
       local: "已有 Skills",
       market: "Market",
       ide: "IDE 浏览",
+      projects: "项目管理",
       settings: "设置"
     },
     header: {
@@ -117,11 +118,15 @@ export default {
     adoptSelected: "纳管选中 ({count})"
   },
   installModal: {
-    title: "选择安装目标 IDE",
-    selectAll: "全选",
-    cancel: "取消",
-    confirm: "确认安装",
-    needSelect: "请选择至少一个 IDE"
+    selectTargetTitle: "选择安装目标",
+    globalIde: "全局 IDE",
+    globalIdeDesc: "安装到全局 IDE 目录，所有项目可用",
+    project: "项目",
+    projectDesc: "安装到项目目录，仅该项目可用",
+    noProjects: "暂无项目",
+    installToIde: "安装到 IDE",
+    installToProject: "安装到项目",
+    cancel: "取消"
   },
   uninstallModal: {
     title: "确认卸载",
@@ -149,7 +154,8 @@ export default {
     importing: "正在导入...",
     adopting: "正在纳入统一管理...",
     handled: "已处理 {linked} 个目标，跳过 {skipped} 个目标。",
-    imported: "成功导入 {success} 个 Skill，失败 {failed} 个。"
+    imported: "成功导入 {success} 个 Skill，失败 {failed} 个。",
+    selectSkillsForProject: "请为项目 {name} 选择要安装的 Skills"
   },
   errors: {
     searchFailed: "搜索失败，请重试。",
@@ -166,7 +172,8 @@ export default {
     ideExists: "IDE 名称已存在",
     selectValidIde: "请选择有效的 IDE",
     selectAtLeastOne: "请选择至少一个 IDE",
-    invalidPath: "路径必须是相对路径或有效的绝对路径。"
+    invalidPath: "路径必须是相对路径或有效的绝对路径。",
+    projectNoIdeTargets: "项目尚未配置 IDE 目标，请先配置。"
   },
   update: {
     available: "发现新版本: {version}",
@@ -190,5 +197,33 @@ export default {
     done: "完成",
     error: "下载失败",
     retry: "重试"
+  },
+  projects: {
+    title: "项目管理",
+    hint: "为不同项目配置独立的 Skills 环境。",
+    add: "添加项目",
+    addTitle: "添加新项目",
+    addHint: "选择项目文件夹并输入项目名称。",
+    pathPlaceholder: "例如：/Users/name/my-project 或 C:\\Projects\\my-project",
+    namePlaceholder: "例如：My Project",
+    remove: "移除",
+    select: "选中",
+    deselect: "取消",
+    configure: "配置",
+    configureTitle: "配置项目 IDE 目标",
+    linkSkills: "安装 Skills",
+    openDirectory: "打开目录",
+    emptyHint: "暂无项目，点击上方按钮添加。",
+    projectPath: "项目路径",
+    projectName: "项目名称",
+    selectIdeTargets: "选择 IDE 目标",
+    configureHint: "选择该项目需要使用的 IDE，安装 Skills 时会链接到这些 IDE 的项目目录。",
+    cancel: "取消",
+    save: "保存",
+    ideTargets: "IDE 目标：{count} 个",
+    detected: "已检测：{count} 个",
+    selectFolder: "选择项目文件夹",
+    selectFolderButton: "选择文件夹",
+    untitled: "未命名项目"
   }
 };

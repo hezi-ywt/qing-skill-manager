@@ -8,7 +8,7 @@ import { isValidIdePath } from "./utils";
  */
 function loadIdeOptions(): IdeOption[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.ideOptions);
+    const raw = localStorage.getItem(STORAGE_KEYS.IDE_OPTIONS);
     if (!raw) return [...defaultIdeOptions];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [...defaultIdeOptions];
@@ -28,7 +28,7 @@ function loadIdeOptions(): IdeOption[] {
  * Save custom IDE options to localStorage
  */
 function saveIdeOptions(custom: IdeOption[]): void {
-  localStorage.setItem(STORAGE_KEYS.ideOptions, JSON.stringify(custom));
+  localStorage.setItem(STORAGE_KEYS.IDE_OPTIONS, JSON.stringify(custom));
 }
 
 /**
@@ -36,7 +36,7 @@ function saveIdeOptions(custom: IdeOption[]): void {
  */
 export function loadLastInstallTargets(): string[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.installTargets);
+    const raw = localStorage.getItem(STORAGE_KEYS.INSTALL_TARGETS);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -50,7 +50,7 @@ export function loadLastInstallTargets(): string[] {
  * Save last install targets to localStorage
  */
 export function saveLastInstallTargets(labels: string[]): void {
-  localStorage.setItem(STORAGE_KEYS.installTargets, JSON.stringify(labels));
+  localStorage.setItem(STORAGE_KEYS.INSTALL_TARGETS, JSON.stringify(labels));
 }
 
 /**

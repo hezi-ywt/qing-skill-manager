@@ -14,7 +14,7 @@ export function useMarketConfig() {
    * Load market configurations from localStorage
    */
   function loadMarketConfigs(): void {
-    const saved = localStorage.getItem(STORAGE_KEYS.marketConfigs);
+    const saved = localStorage.getItem(STORAGE_KEYS.MARKET_CONFIGS);
     if (saved) {
       try {
         marketConfigs.value = JSON.parse(saved);
@@ -23,7 +23,7 @@ export function useMarketConfig() {
       }
     }
     // Load enabled markets
-    const savedEnabled = localStorage.getItem(STORAGE_KEYS.enabledMarkets);
+    const savedEnabled = localStorage.getItem(STORAGE_KEYS.ENABLED_MARKETS);
     if (savedEnabled) {
       try {
         enabledMarkets.value = JSON.parse(savedEnabled);
@@ -39,8 +39,8 @@ export function useMarketConfig() {
   function saveMarketConfigs(configs: Record<string, string>, enabled: Record<string, boolean>): void {
     marketConfigs.value = configs;
     enabledMarkets.value = enabled;
-    localStorage.setItem(STORAGE_KEYS.marketConfigs, JSON.stringify(configs));
-    localStorage.setItem(STORAGE_KEYS.enabledMarkets, JSON.stringify(enabled));
+    localStorage.setItem(STORAGE_KEYS.MARKET_CONFIGS, JSON.stringify(configs));
+    localStorage.setItem(STORAGE_KEYS.ENABLED_MARKETS, JSON.stringify(enabled));
   }
 
   /**

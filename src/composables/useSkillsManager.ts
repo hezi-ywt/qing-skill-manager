@@ -6,7 +6,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useToast } from "./useToast";
 import type {
   RemoteSkill, MarketStatus, InstallResult, LocalSkill,
-  IdeSkill, Overview, LinkTarget, DownloadTask
+  IdeSkill, Overview, LinkTarget, DownloadTask, ProjectConfig
 } from "./types";
 import { useIdeConfig } from "./useIdeConfig";
 import { useMarketConfig } from "./useMarketConfig";
@@ -20,7 +20,7 @@ export function useSkillsManager() {
     string,
     { timestamp: number; data: { skills: RemoteSkill[]; total: number; limit: number; offset: number; marketStatuses: MarketStatus[] } }
   >();
-  const activeTab = ref<"local" | "market" | "ide" | "settings">("local");
+  const activeTab = ref<"local" | "market" | "ide" | "projects" | "settings">("local");
 
   const query = ref("");
   const results = ref<RemoteSkill[]>([]);
@@ -357,8 +357,59 @@ export function useSkillsManager() {
     saveLastInstallTargets(next);
   }
 
-  async function confirmInstallToIde() {
-    if (installTargetSkills.value.length === 0 || installTargetIde.value.length === 0) {
+  async function confirmInstallToIde(installTarget: "ide" | "project", targetIds: string[], projects?: ProjectConfig[]) {
+    if (installTarget === "project") {
+      // Project installation
+      if (!projects || projects.length === 0) {
+        toast.error("No projects available");
+        showInstallModal.value = false;
+        installTargetSkills.value = [];
+        return;
+      }
+      
+      if (installTargetSkills.value.length === 0 || targetIds.length === 0) {
+        toast.error(t("errors.selectAtLeastOne"));
+        return;
+      }
+      if (installingId.value) return;
+      installingId.value = installTargetSkills.value.length === 1 ? installTargetSkills.value[0].id : "__batch__";
+      busy.value = true;
+      busyText.value = t("messages.installing");
+
+      try {
+        let totalLinked = 0;
+        let totalSkipped = 0;
+        
+        // Get selected projects
+        const selectedProjects = projects.filter(p => targetIds.includes(p.id));
+        
+        // Install to project directories
+        for (const skill of installTargetSkills.value) {
+          for (const project of selectedProjects) {
+            for (const ideLabel of project.ideTargets) {
+              const result = await linkSkillToProjectInternal(skill, project.path, ideLabel, true, true);
+              totalLinked += result.linked.length;
+              totalSkipped += result.skipped.length;
+            }
+          }
+        }
+        
+        toast.success(t("messages.handled", { linked: totalLinked, skipped: totalSkipped }));
+        await scanLocalSkills();
+        showInstallModal.value = false;
+        installTargetSkills.value = [];
+      } catch (err) {
+        toast.error(getErrorMessage(err, t("errors.installFailed")));
+      } finally {
+        installingId.value = null;
+        busy.value = false;
+        busyText.value = "";
+      }
+      return;
+    }
+    
+    // IDE installation (existing logic)
+    if (installTargetSkills.value.length === 0 || targetIds.length === 0) {
       toast.error(t("errors.selectAtLeastOne"));
       return;
     }
@@ -370,13 +421,16 @@ export function useSkillsManager() {
     try {
       let totalLinked = 0;
       let totalSkipped = 0;
+      
+      // Install to global IDE directories
       for (const skill of installTargetSkills.value) {
-        for (const label of installTargetIde.value) {
+        for (const label of targetIds) {
           const result = await linkSkillInternal(skill, label, true, true);
           totalLinked += result.linked.length;
           totalSkipped += result.skipped.length;
         }
       }
+      
       toast.success(t("messages.handled", { linked: totalLinked, skipped: totalSkipped }));
       await scanLocalSkills();
       showInstallModal.value = false;
@@ -388,6 +442,42 @@ export function useSkillsManager() {
       busy.value = false;
       busyText.value = "";
     }
+  }
+
+  async function linkSkillToProjectInternal(skill: LocalSkill, projectPath: string, ideLabel: string, skipScan = false, suppressToast = false) {
+    const linkTargets = await buildProjectLinkTargets(projectPath, ideLabel);
+    if (linkTargets.length === 0) {
+      throw new Error(t("errors.selectValidIde"));
+    }
+    const result = (await invoke("link_local_skill", {
+      request: {
+        skillPath: skill.path,
+        skillName: skill.name,
+        linkTargets
+      }
+    })) as InstallResult;
+
+    const linkedCount = result.linked.length;
+    const skippedCount = result.skipped.length;
+    if (!suppressToast) {
+      toast.success(t("messages.handled", { linked: linkedCount, skipped: skippedCount }));
+    }
+    if (!skipScan) {
+      await scanLocalSkills();
+    }
+    return result;
+  }
+
+  async function buildProjectLinkTargets(projectPath: string, ideLabel: string): Promise<LinkTarget[]> {
+    const target = ideOptions.value.find((option) => option.label === ideLabel);
+    if (!target) return [];
+
+    const dir = target.globalDir;
+
+    // Build project-specific path
+    const skillPath = dir.startsWith("/") ? dir : `${projectPath}/${dir}`;
+    
+    return [{ name: `${target.label} (${projectPath.split('/').pop()})`, path: skillPath }];
   }
 
   function closeInstallModal() {

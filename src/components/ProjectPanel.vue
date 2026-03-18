@@ -1,0 +1,185 @@
+<script setup lang="ts">
+import type { ProjectConfig, LocalSkill, IdeOption } from "../composables/types";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
+
+const props = defineProps<{
+  projects: ProjectConfig[];
+  selectedProjectId: string | null;
+  localSkills: LocalSkill[];
+  ideOptions: IdeOption[];
+  localLoading: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: "addProject"): void;
+  (e: "removeProject", projectId: string): void;
+  (e: "selectProject", projectId: string | null): void;
+  (e: "configureProject", projectId: string): void;
+  (e: "linkSkills", projectId: string): void;
+}>();
+
+function handleAddProject() {
+  emit("addProject");
+}
+
+function handleRemoveProject(projectId: string) {
+  emit("removeProject", projectId);
+}
+
+function handleSelectProject(projectId: string) {
+  emit("selectProject", projectId === props.selectedProjectId ? null : projectId);
+}
+
+function handleConfigureProject(projectId: string) {
+  emit("configureProject", projectId);
+}
+
+function handleLinkSkills(projectId: string) {
+  emit("linkSkills", projectId);
+}
+</script>
+
+<template>
+  <section class="panel">
+    <div class="panel-title">{{ t("projects.title") }}</div>
+    <div class="hint">{{ t("projects.hint") }}</div>
+
+    <div class="actions">
+      <div class="buttons">
+        <button class="primary" @click="handleAddProject">
+          {{ t("projects.add") }}
+        </button>
+      </div>
+    </div>
+
+    <div v-if="projects.length === 0" class="hint">{{ t("projects.emptyHint") }}</div>
+
+    <div v-else class="project-list">
+      <div
+        v-for="project in projects"
+        :key="project.id"
+        class="project-item"
+        :class="{ selected: selectedProjectId === project.id }"
+      >
+        <div class="project-header">
+          <div class="project-info">
+            <div class="project-name">{{ project.name }}</div>
+            <div class="project-path">{{ project.path }}</div>
+          </div>
+          <div class="project-actions">
+            <button
+              class="ghost small"
+              @click="handleSelectProject(project.id)"
+            >
+              {{ selectedProjectId === project.id ? t("projects.deselect") : t("projects.select") }}
+            </button>
+            <button
+              class="ghost small"
+              @click="handleConfigureProject(project.id)"
+            >
+              {{ t("projects.configure") }}
+            </button>
+            <button
+              class="primary small"
+              :disabled="localLoading"
+              @click="handleLinkSkills(project.id)"
+            >
+              {{ t("projects.linkSkills") }}
+            </button>
+            <button
+              class="ghost danger small"
+              @click="handleRemoveProject(project.id)"
+            >
+              {{ t("projects.remove") }}
+            </button>
+          </div>
+        </div>
+        <div class="project-meta">
+          <span class="meta-item">
+            {{ t("projects.ideTargets", { count: project.ideTargets.length }) }}
+          </span>
+          <span v-if="project.detectedIdeDirs.length > 0" class="meta-item">
+            {{ t("projects.detected", { count: project.detectedIdeDirs.length }) }}
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.project-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-item {
+  padding: 16px;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.project-item.selected {
+  border-color: var(--color-primary-bg);
+  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+}
+
+.project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.project-info {
+  flex: 1;
+  min-width: 200px;
+}
+
+.project-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 4px;
+}
+
+.project-path {
+  font-size: 12px;
+  color: var(--color-muted);
+  word-break: break-all;
+}
+
+.project-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.project-actions button {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.project-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.meta-item {
+  padding: 2px 8px;
+  background: var(--color-chip-bg);
+  border-radius: 999px;
+  font-size: 11px;
+}
+</style>

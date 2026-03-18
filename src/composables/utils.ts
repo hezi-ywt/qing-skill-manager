@@ -3,6 +3,32 @@
  */
 
 /**
+ * Windows reserved names that cannot be used as file/directory names
+ */
+const WINDOWS_RESERVED_NAMES = [
+  'CON', 'PRN', 'AUX', 'NUL',
+  'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+  'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
+];
+
+/**
+ * Check if a name is a Windows reserved name
+ */
+function isWindowsReservedName(name: string): boolean {
+  const upper = name.toUpperCase();
+  // Check exact match
+  if (WINDOWS_RESERVED_NAMES.includes(upper)) {
+    return true;
+  }
+  // Check with extension (e.g., CON.txt, NUL.md)
+  const base = upper.split('.')[0];
+  if (WINDOWS_RESERVED_NAMES.includes(base)) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Validates if a path is a safe relative path (not absolute, no parent directory traversal)
  */
 export function isSafeRelativePath(input: string): boolean {
@@ -12,7 +38,18 @@ export function isSafeRelativePath(input: string): boolean {
     return false;
   }
   const parts = trimmed.split(/[\\/]+/);
-  return parts.every((part) => part !== ".." && part !== "");
+  if (parts.some((part) => part === ".." || part === "")) {
+    return false;
+  }
+  // Check for Windows reserved names in any path component
+  if (parts.some((part) => isWindowsReservedName(part))) {
+    return false;
+  }
+  // Check for control characters
+  if (/[\x00-\x1f\x7f]/.test(trimmed)) {
+    return false;
+  }
+  return true;
 }
 
 /**

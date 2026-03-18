@@ -4,16 +4,24 @@ import { useI18n } from "vue-i18n";
 import { i18n, supportedLocales, type SupportedLocale } from "./i18n";
 import { useSkillsManager } from "./composables/useSkillsManager";
 import { useUpdateStore } from "./composables/useUpdateStore";
+import { useProjectConfig } from "./composables/useProjectConfig";
+import { useToast } from "./composables/useToast";
 import MarketPanel from "./components/MarketPanel.vue";
 import LocalPanel from "./components/LocalPanel.vue";
 import IdePanel from "./components/IdePanel.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
+import ProjectsPanel from "./components/ProjectsPanel.vue";
 import InstallModal from "./components/InstallModal.vue";
 import UninstallModal from "./components/UninstallModal.vue";
 import LoadingOverlay from "./components/LoadingOverlay.vue";
 import Toast from "./components/Toast.vue";
+import ProjectAddModal from "./components/ProjectAddModal.vue";
+import ProjectConfigModal from "./components/ProjectConfigModal.vue";
 
 const { t } = useI18n();
+
+// Mark components as used for template
+void [ProjectsPanel, ProjectAddModal, ProjectConfigModal];
 
 const localeKey = "skillsManager.locale";
 const themeKey = "skillsManager.theme";
@@ -46,6 +54,9 @@ onMounted(() => {
 
   // Check for updates on startup
   checkOnStartup();
+  
+  // Load projects
+  loadProjects();
 });
 
 watch(locale, (next) => {
@@ -74,7 +85,6 @@ const {
   customIdeOptions,
   filteredIdeSkills,
   showInstallModal,
-  installTargetIde,
   showUninstallModal,
   uninstallTargetName,
   uninstallMode,
@@ -87,7 +97,6 @@ const {
   updateSkill,
   scanLocalSkills,
   openInstallModal,
-  updateInstallTargetIde,
   addCustomIde,
   removeCustomIde,
   openUninstallModal,
@@ -113,6 +122,80 @@ const {
 
 // Update store for startup check and badge
 const { updateAvailable, checkOnStartup } = useUpdateStore();
+
+// Toast
+const toast = useToast();
+
+// Project management
+const {
+  projects,
+  selectedProjectId,
+  selectedProject,
+  loadProjects,
+  addProject,
+  removeProject,
+  updateProjectIdeTargets,
+  updateDetectedIdeDirs
+} = useProjectConfig();
+
+const showProjectAddModal = ref(false);
+const showProjectConfigModal = ref(false);
+const configuringProject = ref<typeof selectedProject.value>(null);
+
+async function handleAddProject() {
+  showProjectAddModal.value = true;
+}
+
+async function handleRemoveProject(projectId: string) {
+  removeProject(projectId);
+}
+
+async function handleSelectProject(projectId: string | null) {
+  selectedProjectId.value = projectId;
+}
+
+async function handleConfigureProject(projectId: string) {
+  configuringProject.value = projects.value.find((p) => p.id === projectId) || null;
+  showProjectConfigModal.value = true;
+}
+
+async function handleProjectAddConfirm(path: string, name: string) {
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const scanResult = await invoke("scan_project_ide_dirs", {
+      request: { projectDir: path }
+    }) as { detectedIdeDirs: Array<{ label: string; relativeDir: string; absolutePath: string }> };
+
+    const project = addProject(path, name, []);
+    if (project) {
+      updateDetectedIdeDirs(project.id, scanResult.detectedIdeDirs);
+    }
+    showProjectAddModal.value = false;
+  } catch (err) {
+    console.error("Failed to scan project:", err);
+  }
+}
+
+async function handleProjectConfigSave(projectId: string, ideTargets: string[]) {
+  updateProjectIdeTargets(projectId, ideTargets);
+  showProjectConfigModal.value = false;
+  configuringProject.value = null;
+}
+
+async function handleLinkSkills(projectId: string) {
+  const project = projects.value.find((p) => p.id === projectId);
+  if (!project || project.ideTargets.length === 0) {
+    toast.error(t("errors.projectNoIdeTargets"));
+    return;
+  }
+
+  // Store project context for installation
+  selectedProjectId.value = projectId;
+  
+  // Switch to local tab and let user select skills
+  activeTab.value = "local";
+  toast.info(t("messages.selectSkillsForProject", { name: project.name }));
+}
 </script>
 
 <template>
@@ -136,6 +219,13 @@ const { updateAvailable, checkOnStartup } = useUpdateStore();
           @click="activeTab = 'ide'"
         >
           {{ t("app.tabs.ide") }}
+        </button>
+        <button
+          class="tab"
+          :class="{ active: activeTab === 'projects' }"
+          @click="activeTab = 'projects'"
+        >
+          {{ t("app.tabs.projects") }}
         </button>
         <button
           class="tab"
@@ -247,6 +337,21 @@ const { updateAvailable, checkOnStartup } = useUpdateStore();
         />
       </template>
 
+      <template v-else-if="activeTab === 'projects'">
+        <ProjectsPanel
+          :projects="projects"
+          :selected-project-id="selectedProjectId"
+          :local-skills="localSkills"
+          :ide-options="ideOptions"
+          :local-loading="localLoading"
+          @add-project="handleAddProject"
+          @remove-project="handleRemoveProject"
+          @select-project="handleSelectProject"
+          @configure-project="handleConfigureProject"
+          @link-skills="handleLinkSkills"
+        />
+      </template>
+
       <template v-else-if="activeTab === 'settings'">
         <SettingsPanel />
       </template>
@@ -255,8 +360,7 @@ const { updateAvailable, checkOnStartup } = useUpdateStore();
     <InstallModal
       :visible="showInstallModal"
       :ide-options="ideOptions"
-      :selected="installTargetIde"
-      @update:selected="updateInstallTargetIde"
+      :projects="projects"
       @confirm="confirmInstallToIde"
       @cancel="closeInstallModal"
     />
@@ -267,6 +371,20 @@ const { updateAvailable, checkOnStartup } = useUpdateStore();
       :mode="uninstallMode"
       @confirm="confirmUninstall"
       @cancel="cancelUninstall"
+    />
+
+    <ProjectAddModal
+      :visible="showProjectAddModal"
+      @close="showProjectAddModal = false"
+      @confirm="handleProjectAddConfirm"
+    />
+
+    <ProjectConfigModal
+      :visible="showProjectConfigModal"
+      :project="configuringProject"
+      :ide-options="ideOptions"
+      @close="() => { showProjectConfigModal = false; configuringProject = null; }"
+      @save="handleProjectConfigSave"
     />
 
     <Toast />

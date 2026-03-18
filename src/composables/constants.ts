@@ -22,10 +22,11 @@ export const defaultIdeOptions: IdeOption[] = [
  * LocalStorage keys
  */
 export const STORAGE_KEYS = {
-  ideOptions: "skillsManager.ideOptions",
-  installTargets: "skillsManager.lastInstallTargets",
-  marketConfigs: "skillsManager.marketConfigs",
-  enabledMarkets: "market-enabled"
+  IDE_OPTIONS: "skillsManager.ideOptions",
+  INSTALL_TARGETS: "skillsManager.lastInstallTargets",
+  MARKET_CONFIGS: "skillsManager.marketConfigs",
+  ENABLED_MARKETS: "market-enabled",
+  PROJECTS: "skillsManager.projects"
 } as const;
 
 /**
@@ -50,3 +51,21 @@ export const defaultEnabledMarkets: Record<string, boolean> = {
   "skillsllm": true,
   "skillsmp": false // Disabled by default until API key is provided
 };
+
+/**
+ * IDE directory mappings for project-level skills
+ */
+export const ideDirMappings: Array<{ label: string; path: string }> = [
+  { label: "Antigravity", path: ".gemini/antigravity/skills" },
+  { label: "Claude Code", path: ".claude/skills" },
+  { label: "CodeBuddy", path: ".codebuddy/skills" },
+  { label: "Codex", path: ".codex/skills" },
+  { label: "Cursor", path: ".cursor/skills" },
+  { label: "Kiro", path: ".kiro/skills" },
+  { label: "OpenClaw", path: ".openclaw/skills" },
+  { label: "OpenCode", path: ".config/opencode/skills" },
+  { label: "Qoder", path: ".qoder/skills" },
+  { label: "Trae", path: ".trae/skills" },
+  { label: "VSCode", path: ".github/skills" },
+  { label: "Windsurf", path: ".windsurf/skills" }
+];

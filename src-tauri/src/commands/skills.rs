@@ -1,6 +1,7 @@
 use crate::types::{
     AdoptIdeSkillRequest, DeleteLocalSkillRequest, IdeSkill, ImportRequest, InstallResult,
-    LinkRequest, LocalScanRequest, LocalSkill, Overview, UninstallRequest,
+    LinkRequest, LocalScanRequest, LocalSkill, Overview, ProjectIdeDir, ProjectScanRequest,
+    ProjectScanResult, UninstallRequest,
 };
 use crate::utils::download::copy_dir_recursive;
 use crate::utils::path::{normalize_path, resolve_canonical, sanitize_dir_name};
@@ -360,7 +361,10 @@ pub fn scan_overview(request: LocalScanRequest) -> Result<Overview, String> {
     // Resolve IDE directories: absolute paths are used directly, relative paths are joined with home
     let ide_dirs: Vec<(String, PathBuf)> = if request.ide_dirs.is_empty() {
         vec![
-            ("Antigravity".to_string(), home.join(".gemini/antigravity/skills")),
+            (
+                "Antigravity".to_string(),
+                home.join(".gemini/antigravity/skills"),
+            ),
             ("Claude".to_string(), home.join(".claude/skills")),
             ("CodeBuddy".to_string(), home.join(".codebuddy/skills")),
             ("Codex".to_string(), home.join(".codex/skills")),
@@ -654,4 +658,46 @@ pub fn delete_local_skills(request: DeleteLocalSkillRequest) -> Result<String, S
     }
 
     Ok(format!("Deleted {} skills", deleted))
+}
+
+#[tauri::command]
+pub fn scan_project_ide_dirs(request: ProjectScanRequest) -> Result<ProjectScanResult, String> {
+    let project_dir = PathBuf::from(&request.project_dir);
+
+    if !project_dir.exists() {
+        return Err("Project directory does not exist".to_string());
+    }
+
+    let ide_dir_patterns = [
+        (".gemini/antigravity/skills", "Antigravity"),
+        (".claude/skills", "Claude Code"),
+        (".codebuddy/skills", "CodeBuddy"),
+        (".codex/skills", "Codex"),
+        (".cursor/skills", "Cursor"),
+        (".kiro/skills", "Kiro"),
+        (".openclaw/skills", "OpenClaw"),
+        (".config/opencode/skills", "OpenCode"),
+        (".qoder/skills", "Qoder"),
+        (".trae/skills", "Trae"),
+        (".github/skills", "VSCode"),
+        (".windsurf/skills", "Windsurf"),
+    ];
+
+    let mut detected_ide_dirs = Vec::new();
+
+    for (relative_path, label) in ide_dir_patterns.iter() {
+        let ide_path = project_dir.join(relative_path);
+        if ide_path.exists() && ide_path.is_dir() {
+            detected_ide_dirs.push(ProjectIdeDir {
+                label: label.to_string(),
+                relative_dir: relative_path.to_string(),
+                absolute_path: ide_path.display().to_string(),
+            });
+        }
+    }
+
+    Ok(ProjectScanResult {
+        project_dir: request.project_dir,
+        detected_ide_dirs,
+    })
 }
