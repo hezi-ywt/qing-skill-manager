@@ -1,13 +1,90 @@
 use crate::types::{
-    AdoptIdeSkillRequest, DeleteLocalSkillRequest, IdeSkill, ImportRequest, InstallResult,
-    LinkRequest, LocalScanRequest, LocalSkill, Overview, ProjectIdeDir, ProjectScanRequest,
-    ProjectScanResult, UninstallRequest,
+    AdoptIdeSkillRequest, AnalyzeConflictRequest, ConflictAnalysis, ConflictResolution,
+    ConflictSeverity, ConflictType, CreateVariantRequest, CreateVariantResponse,
+    CreateVersionRequest, CreateVersionResponse,
+    DeleteLocalSkillRequest, DeleteStrategy, DeleteVariantRequest, DeleteVersionRequest,
+    DeleteVersionResponse, GetSkillPackageRequest, GetSkillPackageResponse, IdeSkill, ImportRequest,
+    InstallResult, LinkRequest, ListSkillPackagesResponse, LocalScanRequest, LocalSkill,
+    MetadataChange, Overview, ProjectIdeDir, ProjectScanRequest, ProjectScanResult, ProjectSkill,
+    ProjectSkillImportStatus, ProjectSkillScanResult, RenameVersionRequest,
+    RenameVersionResponse, ResolutionAction, ResolutionSuggestion, ResolveConflictRequest,
+    ResolveConflictResult, ScanProjectSkillsRequest, SetDefaultVersionRequest, SkillDiff,
+    SkillPackage, SkillPackageSummary, SkillVariant, SkillVersion, SkillVersionMetadata,
+    SkillVersionSource, UninstallRequest, UpdateVariantRequest,
 };
 use crate::utils::download::copy_dir_recursive;
 use crate::utils::path::{normalize_path, resolve_canonical, sanitize_dir_name};
 use crate::utils::security::{is_absolute_ide_path, is_valid_ide_path};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const VERSION_METADATA_FILE: &str = ".skills-manager-version.json";
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct StoredVersionMetadata {
+    version: Option<String>,
+    display_name: Option<String>,
+    source_url: Option<String>,
+    parent_version: Option<String>,
+    deleted: Option<bool>,
+}
+
+#[derive(Debug, Clone)]
+struct ParsedSkillMetadata {
+    name: String,
+    description: String,
+    version: Option<String>,
+    author: Option<String>,
+    namespace: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+struct StoredPackageState {
+    default_version: Option<String>,
+    variants: Vec<SkillVariant>,
+}
+
+fn now_timestamp() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+fn manager_versions_root(home: &Path) -> PathBuf {
+    home.join(".skills-manager/versions")
+}
+
+fn build_skill_id(name: &str, namespace: Option<&str>) -> String {
+    let safe_name = sanitize_dir_name(name);
+    let safe_namespace = namespace
+        .map(sanitize_dir_name)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "default".to_string());
+    format!("{}_{}", safe_name, safe_namespace)
+}
+
+fn version_metadata_path(home: &Path, skill_id: &str, version_id: &str) -> PathBuf {
+    manager_versions_root(home)
+        .join(skill_id)
+        .join(version_id)
+        .join("metadata.json")
+}
+
+fn write_version_sidecar(skill_dir: &Path, sidecar: &StoredVersionMetadata) -> Result<(), String> {
+    let path = skill_dir.join(VERSION_METADATA_FILE);
+    let serialized = serde_json::to_string_pretty(sidecar).map_err(|err| err.to_string())?;
+    fs::write(path, serialized).map_err(|err| err.to_string())
+}
+
+fn package_state_path(home: &Path, skill_id: &str) -> PathBuf {
+    manager_versions_root(home).join(skill_id).join("package.json")
+}
 
 fn read_skill_metadata(skill_dir: &Path) -> (String, String) {
     let name = skill_dir
@@ -28,6 +105,7 @@ fn read_skill_metadata(skill_dir: &Path) -> (String, String) {
     let mut description = String::new();
 
     let mut in_frontmatter = false;
+    let mut frontmatter_closed = false;
     for line in lines {
         let trimmed = line.trim();
         if trimmed == "---" {
@@ -35,7 +113,9 @@ fn read_skill_metadata(skill_dir: &Path) -> (String, String) {
                 in_frontmatter = true;
                 continue;
             }
-            break;
+            in_frontmatter = false;
+            frontmatter_closed = true;
+            continue;
         }
         if in_frontmatter {
             if let Some(value) = trimmed.strip_prefix("name:") {
@@ -43,13 +123,334 @@ fn read_skill_metadata(skill_dir: &Path) -> (String, String) {
             }
             continue;
         }
-        if description.is_empty() && !trimmed.is_empty() && !trimmed.starts_with('#') {
+        if (frontmatter_closed || frontmatter_name.is_none())
+            && description.is_empty()
+            && !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+        {
             description = trimmed.to_string();
         }
     }
 
     let final_name = frontmatter_name.unwrap_or(name);
     (final_name, description)
+}
+
+fn parse_skill_metadata(skill_dir: &Path) -> ParsedSkillMetadata {
+    let (name, description) = read_skill_metadata(skill_dir);
+    let content = fs::read_to_string(skill_dir.join("SKILL.md")).unwrap_or_default();
+    let mut version = None;
+    let mut author = None;
+    let mut namespace = None;
+    let mut in_frontmatter = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "---" {
+            in_frontmatter = !in_frontmatter;
+            continue;
+        }
+        if !in_frontmatter {
+            continue;
+        }
+        if let Some(value) = trimmed.strip_prefix("version:") {
+            version = Some(value.trim().to_string());
+        } else if let Some(value) = trimmed.strip_prefix("author:") {
+            author = Some(value.trim().to_string());
+        } else if let Some(value) = trimmed.strip_prefix("namespace:") {
+            namespace = Some(value.trim().to_string());
+        }
+    }
+
+    ParsedSkillMetadata {
+        name,
+        description,
+        version,
+        author,
+        namespace,
+    }
+}
+
+fn simple_hash(input: &str) -> String {
+    let mut hash: u64 = 1469598103934665603;
+    for byte in input.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(1099511628211);
+    }
+    format!("{:016x}", hash)
+}
+
+fn skill_content_hash(skill_dir: &Path) -> String {
+    let content = fs::read_to_string(skill_dir.join("SKILL.md")).unwrap_or_default();
+    simple_hash(&content)
+}
+
+fn read_version_sidecar(skill_dir: &Path) -> StoredVersionMetadata {
+    let metadata_path = skill_dir.join(VERSION_METADATA_FILE);
+    if !metadata_path.exists() {
+        return StoredVersionMetadata::default();
+    }
+
+    fs::read_to_string(metadata_path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<StoredVersionMetadata>(&content).ok())
+        .unwrap_or_default()
+}
+
+fn build_skill_version(skill_dir: &Path, source: SkillVersionSource) -> SkillVersion {
+    let metadata = parse_skill_metadata(skill_dir);
+    let sidecar = read_version_sidecar(skill_dir);
+    let content_hash = skill_content_hash(skill_dir);
+    let version_label = sidecar
+        .version
+        .clone()
+        .or(metadata.version.clone())
+        .unwrap_or_else(|| "1.0.0".to_string());
+    let skill_id = build_skill_id(&metadata.name, metadata.namespace.as_deref());
+    let version_id = format!("{}_{}", sanitize_dir_name(&version_label), &content_hash[..8]);
+
+    SkillVersion {
+        id: version_id,
+        skill_id,
+        version: version_label.clone(),
+        display_name: sidecar.display_name.unwrap_or(version_label),
+        content_hash,
+        created_at: now_timestamp(),
+        source,
+        source_url: sidecar.source_url,
+        parent_version: sidecar.parent_version,
+        is_active: !sidecar.deleted.unwrap_or(false),
+        metadata: SkillVersionMetadata {
+            name: metadata.name,
+            description: metadata.description,
+            author: metadata.author,
+            namespace: metadata.namespace,
+        },
+    }
+}
+
+fn write_version_metadata(home: &Path, version: &SkillVersion) -> Result<(), String> {
+    let path = version_metadata_path(home, &version.skill_id, &version.id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let serialized = serde_json::to_string_pretty(version).map_err(|err| err.to_string())?;
+    fs::write(path, serialized).map_err(|err| err.to_string())
+}
+
+fn read_package_state(home: &Path, skill_id: &str) -> StoredPackageState {
+    let path = package_state_path(home, skill_id);
+    if !path.exists() {
+        return StoredPackageState::default();
+    }
+
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<StoredPackageState>(&content).ok())
+        .unwrap_or_default()
+}
+
+fn write_package_state(home: &Path, skill_id: &str, state: &StoredPackageState) -> Result<(), String> {
+    let path = package_state_path(home, skill_id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let serialized = serde_json::to_string_pretty(state).map_err(|err| err.to_string())?;
+    fs::write(path, serialized).map_err(|err| err.to_string())
+}
+
+fn collect_versions_for_skill(base: &Path, skill_id: &str) -> Vec<(PathBuf, SkillVersion)> {
+    let Some(home) = dirs::home_dir() else {
+        return Vec::new();
+    };
+
+    let mut versions = Vec::new();
+    let entries = match fs::read_dir(base) {
+        Ok(entries) => entries,
+        Err(_) => return versions,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() || !path.join("SKILL.md").exists() {
+            continue;
+        }
+
+        let version = version_summary_for_skill(&home, &path);
+        if version.skill_id == skill_id {
+            versions.push((path, version));
+        }
+    }
+
+    versions.sort_by(|left, right| right.1.created_at.cmp(&left.1.created_at));
+    versions
+}
+
+fn version_summary_for_skill(home: &Path, skill_dir: &Path) -> SkillVersion {
+    let version = build_skill_version(skill_dir, SkillVersionSource::Migration);
+    let _ = write_version_metadata(home, &version);
+    version
+}
+
+fn build_skill_diff(base: &SkillVersion, incoming: &SkillVersion) -> SkillDiff {
+    let mut metadata_changes = Vec::new();
+
+    if base.metadata.description != incoming.metadata.description {
+        metadata_changes.push(MetadataChange {
+            field: "description".to_string(),
+            old_value: Some(base.metadata.description.clone()),
+            new_value: Some(incoming.metadata.description.clone()),
+        });
+    }
+    if base.metadata.author != incoming.metadata.author {
+        metadata_changes.push(MetadataChange {
+            field: "author".to_string(),
+            old_value: base.metadata.author.clone(),
+            new_value: incoming.metadata.author.clone(),
+        });
+    }
+    if base.version != incoming.version {
+        metadata_changes.push(MetadataChange {
+            field: "version".to_string(),
+            old_value: Some(base.version.clone()),
+            new_value: Some(incoming.version.clone()),
+        });
+    }
+
+    let similarity_score = if base.content_hash == incoming.content_hash {
+        1.0
+    } else if metadata_changes.len() <= 1 {
+        0.82
+    } else if metadata_changes.len() <= 3 {
+        0.55
+    } else {
+        0.25
+    };
+
+    SkillDiff {
+        from_version: base.id.clone(),
+        to_version: incoming.id.clone(),
+        files_changed: vec!["SKILL.md".to_string()],
+        additions: incoming.metadata.description.lines().count(),
+        deletions: base.metadata.description.lines().count(),
+        content_diff: Some(format!(
+            "--- existing\n+++ incoming\n- version: {}\n+ version: {}\n- description: {}\n+ description: {}",
+            base.version,
+            incoming.version,
+            base.metadata.description,
+            incoming.metadata.description
+        )),
+        metadata_changes,
+        similarity_score,
+    }
+}
+
+fn classify_conflict(
+    diff: &SkillDiff,
+) -> (ConflictType, ConflictSeverity, bool, Vec<ResolutionSuggestion>) {
+    if (diff.similarity_score - 1.0).abs() < f64::EPSILON {
+        return (
+            ConflictType::Identical,
+            ConflictSeverity::None,
+            true,
+            vec![ResolutionSuggestion {
+                action: ResolutionAction::FastForward,
+                description: "Identical content; keep the existing version".to_string(),
+                confidence: 1.0,
+            }],
+        );
+    }
+
+    if diff.metadata_changes.len() <= 1 {
+        return (
+            ConflictType::Patch,
+            ConflictSeverity::Minor,
+            true,
+            vec![ResolutionSuggestion {
+                action: ResolutionAction::CreateVersion,
+                description: "Small metadata-only difference; add as a new version".to_string(),
+                confidence: 0.9,
+            }],
+        );
+    }
+
+    if diff.similarity_score >= 0.5 {
+        return (
+            ConflictType::Minor,
+            ConflictSeverity::Major,
+            true,
+            vec![
+                ResolutionSuggestion {
+                    action: ResolutionAction::CreateVersion,
+                    description: "Moderate changes detected; store as a new version".to_string(),
+                    confidence: 0.78,
+                },
+                ResolutionSuggestion {
+                    action: ResolutionAction::CreateVariant,
+                    description: "Keep a separate named variant if both should remain discoverable".to_string(),
+                    confidence: 0.64,
+                },
+            ],
+        );
+    }
+
+    (
+        ConflictType::Fork,
+        ConflictSeverity::Breaking,
+        false,
+        vec![ResolutionSuggestion {
+            action: ResolutionAction::InteractiveMerge,
+            description: "Substantial divergence detected; compare and resolve manually".to_string(),
+            confidence: 0.71,
+        }],
+    )
+}
+
+fn package_from_skill_dir(home: &Path, manager_dir: &Path, skill_dir: &Path) -> SkillPackage {
+    let primary_version = build_skill_version(skill_dir, SkillVersionSource::Migration);
+    let mut versions: Vec<SkillVersion> = collect_versions_for_skill(manager_dir, &primary_version.skill_id)
+        .into_iter()
+        .map(|(_, version)| version)
+        .collect();
+
+    if versions.is_empty() {
+        versions.push(primary_version.clone());
+    }
+
+    let mut state = read_package_state(home, &primary_version.skill_id);
+    if state.variants.is_empty() {
+        state.variants.push(SkillVariant {
+            id: format!("{}-default", primary_version.skill_id),
+            name: "default".to_string(),
+            current_version: state
+                .default_version
+                .clone()
+                .unwrap_or_else(|| primary_version.id.clone()),
+            created_at: now_timestamp(),
+            description: Some("Default tracked version".to_string()),
+        });
+    }
+
+    let default_version = state
+        .default_version
+        .clone()
+        .or_else(|| versions.first().map(|version| version.id.clone()))
+        .unwrap_or_else(|| primary_version.id.clone());
+
+    SkillPackage {
+        id: primary_version.skill_id.clone(),
+        name: primary_version.metadata.name.clone(),
+        namespace: primary_version
+            .metadata
+            .namespace
+            .clone()
+            .unwrap_or_else(|| "default".to_string()),
+        default_version,
+        versions,
+        variants: state.variants,
+        created_at: now_timestamp(),
+        updated_at: now_timestamp(),
+    }
 }
 
 fn collect_skills_from_dir(base: &Path, source: &str, ide: Option<&str>) -> Vec<LocalSkill> {
@@ -73,6 +474,7 @@ fn collect_skills_from_dir(base: &Path, source: &str, ide: Option<&str>) -> Vec<
             continue;
         }
         let (name, description) = read_skill_metadata(&path);
+        let version = dirs::home_dir().map(|home| version_summary_for_skill(&home, &path));
         skills.push(LocalSkill {
             id: path.display().to_string(),
             name,
@@ -81,6 +483,8 @@ fn collect_skills_from_dir(base: &Path, source: &str, ide: Option<&str>) -> Vec<
             source: source.to_string(),
             ide: ide.map(|value| value.to_string()),
             used_by: Vec::new(),
+            version_count: usize::from(version.is_some()),
+            current_version: version,
         });
     }
 
@@ -700,4 +1104,558 @@ pub fn scan_project_ide_dirs(request: ProjectScanRequest) -> Result<ProjectScanR
         project_dir: request.project_dir,
         detected_ide_dirs,
     })
+}
+
+#[tauri::command]
+pub fn scan_project_opencode_skills(
+    request: ScanProjectSkillsRequest,
+) -> Result<ProjectSkillScanResult, String> {
+    let project_dir = PathBuf::from(&request.project_dir);
+    let manager_root = PathBuf::from(&request.manager_root);
+
+    let opencode_path = project_dir.join(".opencode/skills");
+    if !opencode_path.exists() || !opencode_path.is_dir() {
+        return Ok(ProjectSkillScanResult {
+            project_path: request.project_dir,
+            skills: Vec::new(),
+            new_count: 0,
+            duplicate_count: 0,
+            conflict_count: 0,
+        });
+    }
+
+    let existing_skills = collect_skills_from_dir(&manager_root, "manager", None);
+    let existing_names: std::collections::HashMap<String, LocalSkill> = existing_skills
+        .into_iter()
+        .map(|s| (s.name.clone(), s))
+        .collect();
+
+    let mut skills = Vec::new();
+    let mut new_count = 0;
+    let mut duplicate_count = 0;
+    let mut conflict_count = 0;
+
+    let entries = match fs::read_dir(&opencode_path) {
+        Ok(entries) => entries,
+        Err(_) => {
+            return Ok(ProjectSkillScanResult {
+                project_path: request.project_dir,
+                skills: Vec::new(),
+                new_count: 0,
+                duplicate_count: 0,
+                conflict_count: 0,
+            })
+        }
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(item) => item,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        if !path.is_dir() || !path.join("SKILL.md").exists() {
+            continue;
+        }
+
+        let (name, description) = read_skill_metadata(&path);
+        let incoming_version = build_skill_version(&path, SkillVersionSource::Project);
+        let status = if let Some(existing) = existing_names.get(&name) {
+            if existing
+                .current_version
+                .as_ref()
+                .is_some_and(|version| version.content_hash == incoming_version.content_hash)
+            {
+                ProjectSkillImportStatus::Duplicate
+            } else {
+                ProjectSkillImportStatus::Conflict
+            }
+        } else {
+            ProjectSkillImportStatus::New
+        };
+
+        match &status {
+            ProjectSkillImportStatus::New => new_count += 1,
+            ProjectSkillImportStatus::Duplicate => duplicate_count += 1,
+            ProjectSkillImportStatus::Conflict => conflict_count += 1,
+        }
+
+        skills.push(ProjectSkill {
+            id: path.display().to_string(),
+            name: name.clone(),
+            description,
+            path: path.display().to_string(),
+            status: status.clone(),
+            existing_registry_skill: existing_names.get(&name).cloned(),
+            current_version: Some(incoming_version),
+        });
+    }
+
+    Ok(ProjectSkillScanResult {
+        project_path: request.project_dir,
+        skills,
+        new_count,
+        duplicate_count,
+        conflict_count,
+    })
+}
+
+#[tauri::command]
+pub fn resolve_skill_conflict(
+    request: ResolveConflictRequest,
+) -> Result<ResolveConflictResult, String> {
+    let skill_path = PathBuf::from(&request.project_skill_path);
+    let skill_name = skill_path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("skill")
+        .to_string();
+
+    let result = match request.resolution {
+        ConflictResolution::Keep => ResolveConflictResult {
+            success: true,
+            skill_id: None,
+            action: "kept_existing".to_string(),
+        },
+        ConflictResolution::Overwrite => {
+            let safe_name = sanitize_dir_name(&skill_name);
+            ResolveConflictResult {
+                success: true,
+                skill_id: Some(safe_name),
+                action: "overwritten".to_string(),
+            }
+        }
+        ConflictResolution::Coexist => {
+            let coexist_name = request
+                .coexist_name
+                .unwrap_or_else(|| format!("{}-project", skill_name));
+            let safe_name = sanitize_dir_name(&coexist_name);
+            ResolveConflictResult {
+                success: true,
+                skill_id: Some(safe_name),
+                action: "coexisted".to_string(),
+            }
+        }
+    };
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn create_skill_version(request: CreateVersionRequest) -> Result<CreateVersionResponse, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let manager_dir = home.join(".skills-manager/skills");
+    let source_path = PathBuf::from(&request.source_path);
+
+    if !source_path.exists() || !source_path.join("SKILL.md").exists() {
+        return Err("Source skill path is invalid".to_string());
+    }
+
+    let package = get_skill_package(GetSkillPackageRequest {
+        skill_id: request.skill_id.clone(),
+    })?
+    .package;
+
+    let reference_version = package
+        .versions
+        .iter()
+        .find(|version| version.id == package.default_version)
+        .cloned()
+        .or_else(|| package.versions.first().cloned())
+        .ok_or_else(|| "Skill package has no base versions".to_string())?;
+
+    let destination_dir_name = format!(
+        "{}-{}",
+        sanitize_dir_name(&package.name),
+        sanitize_dir_name(&request.display_name)
+    );
+    let destination_path = manager_dir.join(destination_dir_name);
+
+    if destination_path.exists() {
+        return Err("A version with the same destination folder already exists".to_string());
+    }
+
+    copy_dir_recursive(&source_path, &destination_path).map_err(|err| err.to_string())?;
+
+    let sidecar = StoredVersionMetadata {
+        version: Some(request.version.clone()),
+        display_name: Some(request.display_name.clone()),
+        source_url: request.source_url.clone(),
+        parent_version: request.parent_version.clone().or(Some(reference_version.id)),
+        deleted: Some(false),
+    };
+    write_version_sidecar(&destination_path, &sidecar)?;
+
+    let created_version = build_skill_version(&destination_path, request.source.clone());
+    write_version_metadata(&home, &created_version)?;
+
+    Ok(CreateVersionResponse {
+        version: created_version,
+        installed_path: destination_path.display().to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn analyze_skill_conflict(request: AnalyzeConflictRequest) -> Result<ConflictAnalysis, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let manager_dir = home.join(".skills-manager/skills");
+    let existing_skills = collect_skills_from_dir(&manager_dir, "manager", None);
+
+    let base_skill = existing_skills
+        .into_iter()
+        .find(|skill| {
+            skill.current_version.as_ref().is_some_and(|version| {
+                version.skill_id == request.skill_id && version.id == request.base_version_id
+            })
+        })
+        .ok_or_else(|| "Base version not found".to_string())?;
+
+    let base_version = base_skill
+        .current_version
+        .ok_or_else(|| "Base version metadata is missing".to_string())?;
+    let incoming_path = PathBuf::from(&request.incoming_path);
+    let incoming_version = build_skill_version(&incoming_path, SkillVersionSource::Project);
+    let diff = build_skill_diff(&base_version, &incoming_version);
+    let (conflict_type, severity, auto_resolvable, suggestions) = classify_conflict(&diff);
+
+    Ok(ConflictAnalysis {
+        conflict_type,
+        severity,
+        base_version,
+        incoming_version,
+        diff,
+        auto_resolvable,
+        suggestions,
+    })
+}
+
+#[tauri::command]
+pub fn compare_skill_versions(request: crate::types::CompareVersionsRequest) -> Result<SkillDiff, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let manager_dir = home.join(".skills-manager/skills");
+    let package = get_skill_package(GetSkillPackageRequest {
+        skill_id: request.skill_id,
+    })?
+    .package;
+
+    let from_version = package
+        .versions
+        .iter()
+        .find(|version| version.id == request.from_version)
+        .cloned()
+        .ok_or_else(|| "Source version not found".to_string())?;
+
+    let to_version = package
+        .versions
+        .iter()
+        .find(|version| version.id == request.to_version)
+        .cloned()
+        .ok_or_else(|| "Target version not found".to_string())?;
+
+    let _ = manager_dir;
+    Ok(build_skill_diff(&from_version, &to_version))
+}
+
+#[tauri::command]
+pub fn list_skill_packages() -> Result<ListSkillPackagesResponse, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let manager_dir = home.join(".skills-manager/skills");
+    let mut packages = Vec::new();
+    let mut seen: HashMap<String, bool> = HashMap::new();
+    for skill in collect_skills_from_dir(&manager_dir, "manager", None) {
+        if let Some(version) = skill.current_version {
+            if seen.insert(version.skill_id.clone(), true).is_some() {
+                continue;
+            }
+            let package = package_from_skill_dir(&home, &manager_dir, Path::new(&skill.path));
+            if let Some(first) = package.versions.first() {
+                packages.push(SkillPackageSummary {
+                    id: package.id,
+                    name: package.name,
+                    namespace: package.namespace,
+                    version_count: package.versions.len(),
+                    variant_count: package.variants.len(),
+                    latest_version: first.version.clone(),
+                    default_version: package.default_version,
+                    updated_at: package.updated_at,
+                });
+            }
+        }
+    }
+    packages.sort_by(|left, right| left.name.cmp(&right.name));
+
+    Ok(ListSkillPackagesResponse {
+        total: packages.len(),
+        packages,
+    })
+}
+
+#[tauri::command]
+pub fn get_skill_package(request: GetSkillPackageRequest) -> Result<GetSkillPackageResponse, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let manager_dir = home.join(".skills-manager/skills");
+
+    let package = collect_skills_from_dir(&manager_dir, "manager", None)
+        .into_iter()
+        .find_map(|skill| {
+            skill.current_version.as_ref().and_then(|version| {
+                if version.skill_id == request.skill_id {
+                    Some(package_from_skill_dir(&home, &manager_dir, Path::new(&skill.path)))
+                } else {
+                    None
+                }
+            })
+        })
+        .ok_or_else(|| "Skill package not found".to_string())?;
+
+    Ok(GetSkillPackageResponse { package })
+}
+
+#[tauri::command]
+pub fn rename_skill_version(
+    request: RenameVersionRequest,
+) -> Result<RenameVersionResponse, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let manager_dir = home.join(".skills-manager/skills");
+    let skill = collect_skills_from_dir(&manager_dir, "manager", None)
+        .into_iter()
+        .find(|item| {
+            item.current_version.as_ref().is_some_and(|version| {
+                version.skill_id == request.skill_id && version.id == request.version_id
+            })
+        })
+        .ok_or_else(|| "Version not found".to_string())?;
+
+    let skill_path = PathBuf::from(&skill.path);
+    let mut sidecar = read_version_sidecar(&skill_path);
+    sidecar.display_name = Some(request.new_display_name.clone());
+    let sidecar_path = skill_path.join(VERSION_METADATA_FILE);
+    let serialized = serde_json::to_string_pretty(&sidecar).map_err(|err| err.to_string())?;
+    fs::write(sidecar_path, serialized).map_err(|err| err.to_string())?;
+
+    let version = version_summary_for_skill(&home, &skill_path);
+    Ok(RenameVersionResponse {
+        success: true,
+        version,
+    })
+}
+
+#[tauri::command]
+pub fn delete_skill_version(
+    request: DeleteVersionRequest,
+) -> Result<DeleteVersionResponse, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let manager_dir = home.join(".skills-manager/skills");
+    let skill = collect_skills_from_dir(&manager_dir, "manager", None)
+        .into_iter()
+        .find(|item| {
+            item.current_version.as_ref().is_some_and(|version| {
+                version.skill_id == request.skill_id && version.id == request.version_id
+            })
+        })
+        .ok_or_else(|| "Version not found".to_string())?;
+
+    let skill_path = PathBuf::from(&skill.path);
+    let force = request.force.unwrap_or(false);
+    let version_count = collect_skills_from_dir(&manager_dir, "manager", None)
+        .into_iter()
+        .filter(|item| {
+            item.current_version
+                .as_ref()
+                .is_some_and(|version| version.skill_id == request.skill_id)
+        })
+        .count();
+
+    if version_count <= 1 && !force {
+        return Err("Refusing to delete the only available version without force".to_string());
+    }
+
+    match request.strategy {
+        DeleteStrategy::Soft => {
+            let mut sidecar = read_version_sidecar(&skill_path);
+            sidecar.deleted = Some(true);
+            let serialized = serde_json::to_string_pretty(&sidecar).map_err(|err| err.to_string())?;
+            fs::write(skill_path.join(VERSION_METADATA_FILE), serialized).map_err(|err| err.to_string())?;
+            Ok(DeleteVersionResponse {
+                success: true,
+                message: "Version marked as deleted".to_string(),
+                archived_path: None,
+            })
+        }
+        DeleteStrategy::Archive => {
+            let archive_root = home.join(".skills-manager/archive");
+            fs::create_dir_all(&archive_root).map_err(|err| err.to_string())?;
+            let archive_path = archive_root.join(
+                skill_path
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or("skill-version"),
+            );
+            fs::rename(&skill_path, &archive_path).map_err(|err| err.to_string())?;
+            Ok(DeleteVersionResponse {
+                success: true,
+                message: "Version archived".to_string(),
+                archived_path: Some(archive_path.display().to_string()),
+            })
+        }
+        DeleteStrategy::Hard => {
+            fs::remove_dir_all(&skill_path).map_err(|err| err.to_string())?;
+            Ok(DeleteVersionResponse {
+                success: true,
+                message: "Version deleted".to_string(),
+                archived_path: None,
+            })
+        }
+    }
+}
+
+#[tauri::command]
+pub fn set_default_skill_version(
+    request: SetDefaultVersionRequest,
+) -> Result<SkillVersion, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let skill_id = request.skill_id.clone();
+    let version_id = request.version_id.clone();
+    let package = get_skill_package(GetSkillPackageRequest {
+        skill_id,
+    })?;
+    let version = package
+        .package
+        .versions
+        .into_iter()
+        .find(|version| version.id == version_id)
+        .ok_or_else(|| "Version not found".to_string())?;
+
+    let mut state = read_package_state(&home, &version.skill_id);
+    state.default_version = Some(request.version_id.clone());
+    if let Some(default_variant) = state.variants.iter_mut().find(|variant| variant.name == "default") {
+        default_variant.current_version = request.version_id;
+    }
+    write_package_state(&home, &version.skill_id, &state)?;
+
+    Ok(version)
+}
+
+#[tauri::command]
+pub fn create_skill_variant(
+    request: CreateVariantRequest,
+) -> Result<CreateVariantResponse, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let mut state = read_package_state(&home, &request.skill_id);
+    let variant = SkillVariant {
+        id: format!("{}-{}", request.skill_id, sanitize_dir_name(&request.name)),
+        name: request.name,
+        current_version: request.version_id,
+        created_at: now_timestamp(),
+        description: request.description,
+    };
+    state.variants.push(variant.clone());
+    write_package_state(&home, &request.skill_id, &state)?;
+    Ok(CreateVariantResponse { variant })
+}
+
+#[tauri::command]
+pub fn update_skill_variant(request: UpdateVariantRequest) -> Result<SkillVariant, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let mut state = read_package_state(&home, &request.skill_id);
+    let variant = state
+        .variants
+        .iter_mut()
+        .find(|variant| variant.id == request.variant_id)
+        .ok_or_else(|| "Variant not found".to_string())?;
+
+    if let Some(new_name) = request.new_name {
+        variant.name = new_name;
+    }
+    if let Some(new_version_id) = request.new_version_id {
+        variant.current_version = new_version_id;
+    }
+    if request.new_description.is_some() {
+        variant.description = request.new_description;
+    }
+
+    let updated = variant.clone();
+    write_package_state(&home, &request.skill_id, &state)?;
+    Ok(updated)
+}
+
+#[tauri::command]
+pub fn delete_skill_variant(request: DeleteVariantRequest) -> Result<(), String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let mut state = read_package_state(&home, &request.skill_id);
+    let before = state.variants.len();
+    state.variants.retain(|variant| variant.id != request.variant_id);
+    if before == state.variants.len() {
+        return Err("Variant not found".to_string());
+    }
+    write_package_state(&home, &request.skill_id, &state)?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{build_skill_diff, classify_conflict, parse_skill_metadata, simple_hash};
+    use crate::types::{ConflictSeverity, ConflictType, ResolutionAction, SkillVersion, SkillVersionMetadata, SkillVersionSource};
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn fixture_version(description: &str, version: &str, hash: &str) -> SkillVersion {
+        SkillVersion {
+            id: format!("{}-{}", version, hash),
+            skill_id: "demo_default".to_string(),
+            version: version.to_string(),
+            display_name: version.to_string(),
+            content_hash: hash.to_string(),
+            created_at: 0,
+            source: SkillVersionSource::Migration,
+            source_url: None,
+            parent_version: None,
+            is_active: true,
+            metadata: SkillVersionMetadata {
+                name: "Demo".to_string(),
+                description: description.to_string(),
+                author: Some("A".to_string()),
+                namespace: Some("default".to_string()),
+            },
+        }
+    }
+
+    #[test]
+    fn simple_hash_is_stable() {
+        assert_eq!(simple_hash("abc"), simple_hash("abc"));
+        assert_ne!(simple_hash("abc"), simple_hash("def"));
+    }
+
+    #[test]
+    fn parse_skill_metadata_reads_version_fields() {
+        let temp_dir = std::env::temp_dir().join("skills-manager-parse-skill-metadata");
+        let _ = fs::remove_dir_all(&temp_dir);
+        fs::create_dir_all(&temp_dir).expect("create temp dir");
+        fs::write(
+            temp_dir.join("SKILL.md"),
+            "---\nname: Demo\nversion: 2.1.0\nauthor: Tester\nnamespace: team\n---\nDescription line\n",
+        )
+        .expect("write skill file");
+
+        let parsed = parse_skill_metadata(&PathBuf::from(&temp_dir));
+        assert_eq!(parsed.name, "Demo");
+        assert_eq!(parsed.version.as_deref(), Some("2.1.0"));
+        assert_eq!(parsed.author.as_deref(), Some("Tester"));
+        assert_eq!(parsed.namespace.as_deref(), Some("team"));
+        assert_eq!(parsed.description, "Description line");
+
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn classify_conflict_detects_identical_versions() {
+        let base = fixture_version("same", "1.0.0", "aaaa");
+        let incoming = fixture_version("same", "1.0.0", "aaaa");
+        let diff = build_skill_diff(&base, &incoming);
+        let (conflict_type, severity, auto_resolvable, suggestions) = classify_conflict(&diff);
+        assert_eq!(conflict_type, ConflictType::Identical);
+        assert_eq!(severity, ConflictSeverity::None);
+        assert!(auto_resolvable);
+        assert_eq!(suggestions[0].action, ResolutionAction::FastForward);
+    }
 }

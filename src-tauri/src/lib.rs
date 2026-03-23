@@ -5,15 +5,25 @@ mod utils;
 use tauri::Manager;
 use commands::market::{download_marketplace_skill, search_marketplaces, update_marketplace_skill};
 use commands::skills::{
-    adopt_ide_skill, delete_local_skills, import_local_skill, link_local_skill, scan_overview,
-    scan_project_ide_dirs, uninstall_skill,
+    adopt_ide_skill, analyze_skill_conflict, create_skill_variant, create_skill_version, delete_local_skills,
+    delete_skill_variant, delete_skill_version, get_skill_package, import_local_skill,
+    link_local_skill, list_skill_packages, rename_skill_version, resolve_skill_conflict,
+    scan_overview, scan_project_ide_dirs, scan_project_opencode_skills, compare_skill_versions,
+    set_default_skill_version, uninstall_skill, update_skill_variant,
 };
 
 pub use crate::types::{
-    AdoptIdeSkillRequest, DeleteLocalSkillRequest, IdeDir, IdeSkill, ImportRequest, InstallResult,
-    LinkRequest, LinkTarget, LocalScanRequest, LocalSkill, MarketStatus, MarketStatusType,
-    Overview, ProjectIdeDir, ProjectScanRequest, ProjectScanResult, RemoteSkill, RemoteSkillView,
-    RemoteSkillsResponse, RemoteSkillsViewResponse, UninstallRequest,
+    AdoptIdeSkillRequest, AnalyzeConflictRequest, ConflictAnalysis, ConflictResolution,
+    CreateVariantRequest, CreateVariantResponse, CreateVersionRequest, CreateVersionResponse, DeleteLocalSkillRequest, DeleteVariantRequest,
+    DeleteVersionRequest, DeleteVersionResponse, GetSkillPackageRequest, GetSkillPackageResponse,
+    IdeDir, IdeSkill, ImportProjectSkillRequest, ImportRequest, InstallResult, LinkRequest,
+    LinkTarget, ListSkillPackagesResponse, LocalScanRequest, LocalSkill, MarketStatus,
+    MarketStatusType, Overview, ProjectIdeDir, ProjectScanRequest, ProjectScanResult,
+    ProjectSkill, ProjectSkillImportStatus, ProjectSkillScanResult, RemoteSkill,
+    RemoteSkillView, RemoteSkillsResponse, RemoteSkillsViewResponse, RenameVersionRequest,
+    RenameVersionResponse, ResolveConflictRequest, ResolveConflictResult,
+    ScanProjectSkillsRequest, SetDefaultVersionRequest, SkillDiff, SkillPackage,
+    SkillPackageSummary, SkillVariant, SkillVersion, UninstallRequest, UpdateVariantRequest,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -33,7 +43,20 @@ pub fn run() {
             import_local_skill,
             delete_local_skills,
             adopt_ide_skill,
-            scan_project_ide_dirs
+            scan_project_ide_dirs,
+            scan_project_opencode_skills,
+            resolve_skill_conflict,
+            analyze_skill_conflict,
+            create_skill_version,
+            compare_skill_versions,
+            list_skill_packages,
+            get_skill_package,
+            rename_skill_version,
+            delete_skill_version,
+            set_default_skill_version,
+            create_skill_variant,
+            update_skill_variant,
+            delete_skill_variant
         ]);
 
     #[cfg(desktop)]
