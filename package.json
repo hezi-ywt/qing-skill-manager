@@ -8,7 +8,17 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "release": "node \"scripts/release.js\""
+    "release": "node \"scripts/release.js\"",
+    "test": "npm run test:frontend && npm run test:rust",
+    "test:frontend": "npm run typecheck && npm run build:verify",
+    "test:rust": "cd src-tauri && cargo test",
+    "typecheck": "vue-tsc --noEmit",
+    "build:verify": "vite build --mode production",
+    "check": "npm run check:frontend && npm run check:rust",
+    "check:frontend": "npm run typecheck",
+    "check:rust": "cd src-tauri && cargo check && cargo clippy -- -D warnings",
+    "check:rust:fix": "cd src-tauri && cargo clippy --fix --allow-dirty",
+    "verify": "npm run check && npm run test"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
