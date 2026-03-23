@@ -6,7 +6,13 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useToast } from "./useToast";
 import type {
   RemoteSkill, MarketStatus, InstallResult, LocalSkill,
-  IdeSkill, Overview, LinkTarget, DownloadTask, ProjectConfig
+  IdeSkill, Overview, LinkTarget, DownloadTask, ProjectConfig,
+  ProjectSkill, ProjectSkillScanResult, ConflictResolution, ResolveConflictResult,
+  SkillPackage, SkillDiff, ConflictAnalysis,
+  DeleteVersionRequest, DeleteVersionResponse, DeleteStrategy, AnalyzeConflictRequest,
+  GetSkillPackageResponse, RenameVersionResponse, CompareVersionsRequest,
+  CreateVariantRequest, CreateVariantResponse, UpdateVariantRequest, DeleteVariantRequest, SkillVariant,
+  CreateVersionRequest, CreateVersionResponse
 } from "./types";
 import { useIdeConfig } from "./useIdeConfig";
 import { useMarketConfig } from "./useMarketConfig";
@@ -701,6 +707,290 @@ export function useSkillsManager() {
     }
   }
 
+  const projectSkillScanResult = ref<ProjectSkillScanResult | null>(null);
+  const showConflictModal = ref(false);
+  const currentConflictSkill = ref<ProjectSkill | null>(null);
+
+  async function scanProjectSkills(projectPath: string): Promise<ProjectSkillScanResult | null> {
+    busy.value = true;
+    busyText.value = t("messages.scanningProject");
+    try {
+      const installBaseDir = await buildInstallBaseDir();
+      const result = await invoke("scan_project_opencode_skills", {
+        request: {
+          projectDir: projectPath,
+          managerRoot: installBaseDir
+        }
+      }) as ProjectSkillScanResult;
+      projectSkillScanResult.value = result;
+      return result;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.scanProjectFailed")));
+      return null;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  async function resolveConflict(skill: ProjectSkill, resolution: ConflictResolution, coexistName?: string): Promise<boolean> {
+    busy.value = true;
+    busyText.value = t("messages.resolvingConflict");
+    try {
+      const result = await invoke("resolve_skill_conflict", {
+        request: {
+          projectSkillPath: skill.path,
+          resolution,
+          coexistName
+        }
+      }) as ResolveConflictResult;
+
+      if (result.success) {
+        toast.success(t("messages.conflictResolved", { action: result.action }));
+        if (projectSkillScanResult.value) {
+          const skillIndex = projectSkillScanResult.value.skills.findIndex(s => s.path === skill.path);
+          if (skillIndex !== -1) {
+            projectSkillScanResult.value.skills[skillIndex].status = "duplicate";
+          }
+        }
+        return true;
+      } else {
+        toast.error(t("errors.resolveConflictFailed"));
+        return false;
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.resolveConflictFailed")));
+      return false;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  function openConflictModal(skill: ProjectSkill) {
+    currentConflictSkill.value = skill;
+    showConflictModal.value = true;
+  }
+
+  function closeConflictModal() {
+    showConflictModal.value = false;
+    currentConflictSkill.value = null;
+  }
+
+  const currentSkillPackage = ref<SkillPackage | null>(null);
+  const showVersionManagerModal = ref(false);
+  const versionLoading = ref(false);
+  const currentConflictAnalysis = ref<ConflictAnalysis | null>(null);
+  const showVersionDiffModal = ref(false);
+  const currentVersionDiff = ref<SkillDiff | null>(null);
+
+  async function loadSkillPackage(skillId: string): Promise<SkillPackage | null> {
+    versionLoading.value = true;
+    try {
+      const response = await invoke("get_skill_package", {
+        request: { skillId }
+      }) as GetSkillPackageResponse;
+      currentSkillPackage.value = response.package;
+      return response.package;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.loadPackageFailed")));
+      return null;
+    } finally {
+      versionLoading.value = false;
+    }
+  }
+
+  async function compareVersions(skillId: string, fromVersion: string, toVersion: string): Promise<SkillDiff | null> {
+    try {
+      const response = await invoke("compare_skill_versions", {
+        request: { skillId, fromVersion, toVersion } as CompareVersionsRequest
+      }) as SkillDiff;
+      currentVersionDiff.value = response;
+      return response;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.compareVersionsFailed")));
+      return null;
+    }
+  }
+
+  async function createVersion(request: CreateVersionRequest): Promise<CreateVersionResponse | null> {
+    busy.value = true;
+    busyText.value = t("messages.creatingVersion");
+    try {
+      const response = await invoke("create_skill_version", { request }) as CreateVersionResponse;
+      if (currentSkillPackage.value?.id === request.skillId) {
+        await loadSkillPackage(request.skillId);
+      }
+      await scanLocalSkills();
+      toast.success(t("messages.versionCreated", { version: response.version.displayName }));
+      return response;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.createVersionFailed")));
+      return null;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  async function analyzeConflict(request: AnalyzeConflictRequest): Promise<ConflictAnalysis | null> {
+    try {
+      const response = await invoke("analyze_skill_conflict", { request }) as ConflictAnalysis;
+      currentConflictAnalysis.value = response;
+      return response;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.analyzeConflictFailed")));
+      return null;
+    }
+  }
+
+  async function renameVersion(skillId: string, versionId: string, newDisplayName: string): Promise<boolean> {
+    busy.value = true;
+    busyText.value = t("messages.renamingVersion");
+    try {
+      const response = await invoke("rename_skill_version", {
+        request: { skillId, versionId, newDisplayName }
+      }) as RenameVersionResponse;
+      toast.success(t("messages.versionRenamed", { name: response.version.displayName }));
+      if (currentSkillPackage.value?.id === skillId) {
+        await loadSkillPackage(skillId);
+      }
+      await scanLocalSkills();
+      return true;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.renameVersionFailed")));
+      return false;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  async function deleteVersion(skillId: string, versionId: string, strategy: DeleteStrategy, force = false): Promise<boolean> {
+    busy.value = true;
+    busyText.value = t("messages.deletingVersion");
+    try {
+      const response = await invoke("delete_skill_version", {
+        request: { skillId, versionId, strategy, force }
+      } as { request: DeleteVersionRequest }) as DeleteVersionResponse;
+      if (response.success) {
+        toast.success(t("messages.versionDeleted"));
+        if (currentSkillPackage.value?.id === skillId) {
+          await loadSkillPackage(skillId);
+        }
+        await scanLocalSkills();
+        return true;
+      } else {
+        toast.error(response.message);
+        return false;
+      }
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.deleteVersionFailed")));
+      return false;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  async function setDefaultVersion(skillId: string, versionId: string): Promise<boolean> {
+    busy.value = true;
+    busyText.value = t("messages.settingDefaultVersion");
+    try {
+      await invoke("set_default_skill_version", {
+        request: { skillId, versionId }
+      });
+      toast.success(t("messages.defaultVersionSet"));
+      if (currentSkillPackage.value?.id === skillId) {
+        await loadSkillPackage(skillId);
+      }
+      await scanLocalSkills();
+      return true;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.setDefaultVersionFailed")));
+      return false;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  async function createVariant(request: CreateVariantRequest): Promise<SkillVariant | null> {
+    busy.value = true;
+    busyText.value = t("messages.creatingVariant");
+    try {
+      const response = await invoke("create_skill_variant", { request }) as CreateVariantResponse;
+      if (currentSkillPackage.value?.id === request.skillId) {
+        await loadSkillPackage(request.skillId);
+      }
+      toast.success(t("messages.variantCreated", { name: response.variant.name }));
+      return response.variant;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.createVariantFailed")));
+      return null;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  async function updateVariant(request: UpdateVariantRequest): Promise<SkillVariant | null> {
+    busy.value = true;
+    busyText.value = t("messages.updatingVariant");
+    try {
+      const variant = await invoke("update_skill_variant", { request }) as SkillVariant;
+      if (currentSkillPackage.value?.id === request.skillId) {
+        await loadSkillPackage(request.skillId);
+      }
+      toast.success(t("messages.variantUpdated", { name: variant.name }));
+      return variant;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.updateVariantFailed")));
+      return null;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  async function deleteVariant(request: DeleteVariantRequest): Promise<boolean> {
+    busy.value = true;
+    busyText.value = t("messages.deletingVariant");
+    try {
+      await invoke("delete_skill_variant", { request });
+      if (currentSkillPackage.value?.id === request.skillId) {
+        await loadSkillPackage(request.skillId);
+      }
+      toast.success(t("messages.variantDeleted"));
+      return true;
+    } catch (err) {
+      toast.error(getErrorMessage(err, t("errors.deleteVariantFailed")));
+      return false;
+    } finally {
+      busy.value = false;
+      busyText.value = "";
+    }
+  }
+
+  function openVersionManagerModal(skillId: string) {
+    showVersionManagerModal.value = true;
+    void loadSkillPackage(skillId);
+  }
+
+  function closeVersionManagerModal() {
+    showVersionManagerModal.value = false;
+    currentSkillPackage.value = null;
+  }
+
+  function openVersionDiffModal() {
+    showVersionDiffModal.value = true;
+  }
+
+  function closeVersionDiffModal() {
+    showVersionDiffModal.value = false;
+    currentVersionDiff.value = null;
+  }
+
   onMounted(() => {
     refreshIdeOptions();
     loadMarketConfigs();
@@ -742,6 +1032,16 @@ export function useSkillsManager() {
     downloadQueue,
     uninstallMode,
     recentTaskStatus,
+    projectSkillScanResult,
+    showConflictModal,
+    currentConflictSkill,
+
+    currentSkillPackage,
+    showVersionManagerModal,
+    versionLoading,
+    currentConflictAnalysis,
+    showVersionDiffModal,
+    currentVersionDiff,
 
     // Actions
     refreshIdeOptions,
@@ -767,6 +1067,25 @@ export function useSkillsManager() {
     adoptManyIdeSkills,
     addToDownloadQueue,
     removeFromQueue,
-    retryDownload
+    retryDownload,
+    scanProjectSkills,
+    resolveConflict,
+    openConflictModal,
+    closeConflictModal,
+
+    loadSkillPackage,
+    compareVersions,
+    createVersion,
+    analyzeConflict,
+    renameVersion,
+    deleteVersion,
+    setDefaultVersion,
+    createVariant,
+    updateVariant,
+    deleteVariant,
+    openVersionManagerModal,
+    closeVersionManagerModal,
+    openVersionDiffModal,
+    closeVersionDiffModal
   };
 }
