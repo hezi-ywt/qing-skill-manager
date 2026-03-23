@@ -67,7 +67,15 @@ pub fn sanitize_dir_name(name: &str) -> String {
             out.push('-');
         }
     }
+    #[cfg(target_os = "windows")]
     let mut result = if out.is_empty() {
+        "skill".to_string()
+    } else {
+        out.trim_matches('-').to_string()
+    };
+
+    #[cfg(not(target_os = "windows"))]
+    let result = if out.is_empty() {
         "skill".to_string()
     } else {
         out.trim_matches('-').to_string()
@@ -86,4 +94,113 @@ pub fn resolve_canonical(path: &Path) -> Option<PathBuf> {
     fs::canonicalize(path)
         .ok()
         .map(|canon| normalize_path(&canon))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_path_simple() {
+        let path = Path::new("/home/user/docs");
+        let normalized = normalize_path(path);
+        assert_eq!(normalized, PathBuf::from("/home/user/docs"));
+    }
+
+    #[test]
+    fn test_normalize_path_with_current_dir() {
+        let path = Path::new("/home/./user/docs");
+        let normalized = normalize_path(path);
+        assert_eq!(normalized, PathBuf::from("/home/user/docs"));
+    }
+
+    #[test]
+    fn test_normalize_path_with_parent_dir() {
+        let path = Path::new("/home/user/../docs");
+        let normalized = normalize_path(path);
+        assert_eq!(normalized, PathBuf::from("/home/docs"));
+    }
+
+    #[test]
+    fn test_normalize_path_multiple_parents() {
+        let path = Path::new("/home/user/projects/../../docs");
+        let normalized = normalize_path(path);
+        assert_eq!(normalized, PathBuf::from("/home/docs"));
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_simple() {
+        assert_eq!(sanitize_dir_name("My Skill"), "my-skill");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_with_special_chars() {
+        assert_eq!(sanitize_dir_name("Skill@Home!"), "skillhome");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_with_dots() {
+        assert_eq!(sanitize_dir_name("skill.v2.test"), "skill-v2-test");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_uppercase() {
+        assert_eq!(sanitize_dir_name("MY_SKILL"), "my_skill");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_empty() {
+        assert_eq!(sanitize_dir_name(""), "skill");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_only_special_chars() {
+        assert_eq!(sanitize_dir_name("!!!@@@"), "skill");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_trailing_dashes() {
+        assert_eq!(sanitize_dir_name("skill-"), "skill");
+        assert_eq!(sanitize_dir_name("-skill-"), "skill");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_mixed_whitespace() {
+        assert_eq!(sanitize_dir_name("my  skill   name"), "my--skill---name");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_underscore_preserved() {
+        assert_eq!(sanitize_dir_name("my_skill_name"), "my_skill_name");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_unicode() {
+        let result = sanitize_dir_name("技能测试");
+        assert_eq!(result, "skill");
+    }
+
+    #[test]
+    fn test_sanitize_dir_name_mixed_unicode_and_ascii() {
+        let result = sanitize_dir_name("my技能skill");
+        assert_eq!(result, "myskill");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_sanitize_dir_name_windows_reserved() {
+        assert_eq!(sanitize_dir_name("CON"), "_con");
+        assert_eq!(sanitize_dir_name("PRN"), "_prn");
+        assert_eq!(sanitize_dir_name("AUX"), "_aux");
+        assert_eq!(sanitize_dir_name("NUL"), "_nul");
+        assert_eq!(sanitize_dir_name("COM1"), "_com1");
+        assert_eq!(sanitize_dir_name("LPT1"), "_lpt1");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_sanitize_dir_name_windows_reserved_with_extension() {
+        assert_eq!(sanitize_dir_name("CON.txt"), "_con-txt");
+        assert_eq!(sanitize_dir_name("NUL.md"), "_nul-md");
+    }
 }
