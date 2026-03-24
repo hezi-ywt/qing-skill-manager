@@ -110,3 +110,74 @@ export function getErrorMessage(err: unknown, fallback: string): string {
   }
   return fallback;
 }
+
+export type ValidationResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+export function isNonNullObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+export function isValidArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+export function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+export function validateArrayResponse<T>(
+  response: unknown,
+  propertyName: string
+): ValidationResult<T[]> {
+  if (!isNonNullObject(response)) {
+    return { success: false, error: `Expected object response, got ${typeof response}` };
+  }
+
+  const arr = response[propertyName];
+  if (!isValidArray(arr)) {
+    return { success: false, error: `Expected '${propertyName}' to be an array` };
+  }
+
+  return { success: true, data: arr as T[] };
+}
+
+export function validateOverviewResponse(response: unknown): ValidationResult<{
+  managerSkills: unknown[];
+  ideSkills: unknown[];
+}> {
+  if (!isNonNullObject(response)) {
+    return { success: false, error: `Expected object response, got ${typeof response}` };
+  }
+
+  const managerSkills = response.managerSkills;
+  const ideSkills = response.ideSkills;
+
+  if (!isValidArray(managerSkills)) {
+    return { success: false, error: "Expected 'managerSkills' to be an array" };
+  }
+
+  if (!isValidArray(ideSkills)) {
+    return { success: false, error: "Expected 'ideSkills' to be an array" };
+  }
+
+  return { success: true, data: { managerSkills, ideSkills } };
+}
+
+export function hasStringProperty(
+  value: unknown,
+  prop: string
+): value is Record<string, unknown> & { [K in typeof prop]: string } {
+  return isNonNullObject(value) && isNonEmptyString(value[prop]);
+}
+
+export function safeJsonParse(jsonString: string): ValidationResult<unknown> {
+  try {
+    const parsed = JSON.parse(jsonString);
+    return { success: true, data: parsed };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Invalid JSON";
+    return { success: false, error: message };
+  }
+}
