@@ -10,8 +10,8 @@ const toast = useToast();
 
 type ThemeMode = "light" | "dark" | "system";
 type DefaultVersionStrategy = "manual" | "latest" | "stable";
-const themeKey = "skillsManager.theme";
-const localeKey = "skillsManager.locale";
+const themeKey = "qingSkillManager.theme";
+const localeKey = "qingSkillManager.locale";
 const theme = ref<ThemeMode>("system");
 const locale = ref<SupportedLocale>("zh-CN");
 const defaultVersionStrategy = ref<DefaultVersionStrategy>("manual");
@@ -107,7 +107,7 @@ onMounted(async () => {
       <h2 class="section-title">{{ t("settings.about.title") }}</h2>
       <div class="about-content">
         <div class="app-info">
-          <span class="app-name">Skills Manager</span>
+          <span class="app-name">Qing Skill Manager</span>
           <span class="version-badge">v0.3.21</span>
         </div>
 

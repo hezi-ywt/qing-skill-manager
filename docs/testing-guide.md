@@ -1,6 +1,8 @@
 # Testing Guide
 
-This document explains the project's current test and verification scripts, what each one checks, and when to use them.
+This document explains Qing Skill Manager's current test and verification scripts, what each one checks, and when to use them.
+
+This fork is built on top of the original [skills-manager](https://github.com/Rito-w/skills-manager) project.
 
 ## Overview
 

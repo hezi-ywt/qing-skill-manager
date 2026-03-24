@@ -133,7 +133,7 @@ export default {
     title: "Confirm uninstall",
     hint: "This will remove the installed directory. This cannot be undone.",
     deleteTitle: "Confirm local skill deletion",
-    deleteHint: "This will remove the selected skills from Skills Manager local storage. This cannot be undone.",
+    deleteHint: "This will remove the selected skills from Qing Skill Manager local storage. This cannot be undone.",
     cancel: "Cancel",
     confirm: "Uninstall",
     deleteConfirm: "Delete"

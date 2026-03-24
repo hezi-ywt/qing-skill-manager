@@ -1,9 +1,13 @@
-# Skills Manager
+# Qing Skill Manager
 
 [English](README.md) | [中文](README_zh-CN.md)
 
 **将 skill 快速安装到 全局/项目** 
-一款专业的跨平台 AI Skills 管理器。支持从各大主流技能市场（如 Claude Plugins、SkillsLLM、SkillsMP 等）进行聚合搜索，一键下载至统一的本地仓库，并分发到任意受支持的 AI 开发环境中。全面兼容 Windows、macOS 与 Linux 操作系统，让您的 AI 编程助手能力无限扩展。
+Qing Skill Manager 是一个基于原项目重新包装与定制的跨平台 AI Skills 管理器。支持从各大主流技能市场（如 Claude Plugins、SkillsLLM、SkillsMP 等）进行聚合搜索，一键下载至统一的本地仓库，并分发到任意受支持的 AI 开发环境中。全面兼容 Windows、macOS 与 Linux。
+
+## 致谢
+
+本项目基于原始项目 [skills-manager](https://github.com/Rito-w/skills-manager) 二次开发。感谢原作者和贡献者提供的基础实现。
 
 ![Local](docs/screenshots/zh-CN/local.png)
 ![Market](docs/screenshots/zh-CN/market.png)
@@ -12,7 +16,7 @@
 ## ✨ 核心特性
 
 - 🔍 **聚合市场检索**：基于公开 Registry，一站式搜索全网优质 Skills
-- 📦 **统一本地仓库**：集中化管理下载内容 (`~/.skills-manager/skills`)
+- 📦 **统一本地仓库**：集中化管理下载内容 (`~/.qing-skill-manager/skills`)
 - 🚀 **一键极速分发**：将统一的本地 Skills 快速安装至各个目标 IDE
 - 🛠️ **多维管理界面**：支持基于 IDE 的细粒度浏览、无痕安全卸载机制
 - ⚙️ **项目管理**：支持项目管理，将 skills 克隆到项目下，并配置项目使用的 IDE
@@ -44,7 +48,7 @@
 由于目前暂时未配置 Apple 开发者商业证书，初次打开应用可能会遇到“已损坏，无法打开”或提示“未知的开发者”等系统拦截。作为开发者或极客用户，您可以在终端执行以下命令进行安全放行：
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/skills-manager-gui.app"
+xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
 ```
 
 ### 🔍 1) 市场浏览 (Market)

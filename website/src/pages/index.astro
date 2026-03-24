@@ -2,8 +2,8 @@
 import BaseLayout from '@layouts/BaseLayout.astro'
 import { Store, Link2, FolderTree, Monitor } from 'lucide-react'
 
-const title = 'Skills Manager - Multi-IDE Skills 管理器'
-const description = '从 Market 下载、管理本地 Skills，并一键安装到多个 IDE。'
+const title = 'Qing Skill Manager - Multi-IDE Skills 管理器'
+const description = '从 Market 下载、管理本地 Skills，并一键安装到多个 IDE。基于原项目 skills-manager 重新包装。'
 
 const features = [
   {
@@ -33,17 +33,23 @@ const features = [
       <div>
         <div class="inline-flex items-center gap-2 rounded-full border border-border bg-muted/60 px-4 py-1 font-mono text-xs text-muted-foreground mb-6">
           <span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-          <span>Multi-IDE Skills Manager</span>
+          <span>Multi-IDE Qing Skill Manager</span>
         </div>
 
         <h1 class="text-5xl md:text-6xl font-bold mb-6 text-foreground tracking-tight">
-          Skills Manager
+          Qing Skill Manager
         </h1>
 
         <p class="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl leading-relaxed">
           从 Market 下载、管理本地 Skills，并一键安装到多个 IDE。
           <br />
           <span class="text-foreground/80 font-medium">让技能分发更统一、更可控。</span>
+        </p>
+
+        <p class="text-sm text-muted-foreground mb-6 max-w-2xl leading-relaxed">
+          基于原始项目
+          <a href="https://github.com/Rito-w/skills-manager" class="text-primary underline-offset-4 hover:underline" target="_blank" rel="noreferrer">skills-manager</a>
+          进行重新包装与扩展，感谢原作者与贡献者。
         </p>
 
         <div class="mt-6 flex gap-4 text-xs font-mono text-muted-foreground opacity-70 justify-center">

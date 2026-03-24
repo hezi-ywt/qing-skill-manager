@@ -12,11 +12,11 @@ export const defaultIdeOptions: IdeOption[] = [
  * LocalStorage keys
  */
 export const STORAGE_KEYS = {
-  IDE_OPTIONS: "skillsManager.ideOptions",
-  INSTALL_TARGETS: "skillsManager.lastInstallTargets",
-  MARKET_CONFIGS: "skillsManager.marketConfigs",
+  IDE_OPTIONS: "qingSkillManager.ideOptions",
+  INSTALL_TARGETS: "qingSkillManager.lastInstallTargets",
+  MARKET_CONFIGS: "qingSkillManager.marketConfigs",
   ENABLED_MARKETS: "market-enabled",
-  PROJECTS: "skillsManager.projects"
+  PROJECTS: "qingSkillManager.projects"
 } as const;
 
 /**

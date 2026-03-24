@@ -12,13 +12,13 @@ interface Props {
 
 const {
   title,
-  description = 'Skills Manager - Multi-IDE Skills 管理器，支持 Market 下载与本地安装。',
+  description = 'Qing Skill Manager - Multi-IDE Skills 管理器，支持 Market 下载与本地安装。基于原项目 skills-manager 重新包装。',
   lang = 'zh',
   ogImage = '/og.png',
 } = Astro.props
 
-const siteName = 'Skills Manager'
-const siteUrl = 'https://Rito-w.github.io/skills-manager'
+const siteName = 'Qing Skill Manager'
+const siteUrl = 'https://qing-claw.github.io/qing-skill-manager'
 const canonicalURL = (() => {
   try {
     return new URL(Astro.url.pathname, Astro.site).toString()
@@ -41,7 +41,7 @@ const ogImageUrl = (() => {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
-    <meta name="author" content="Rito-w" />
+    <meta name="author" content="qing-claw" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />

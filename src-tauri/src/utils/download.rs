@@ -37,7 +37,7 @@ pub fn download_skill_to_dir(
     overwrite: bool,
 ) -> Result<PathBuf, String> {
     let home = dirs::home_dir().ok_or("无法获取用户目录")?;
-    let allowed_base = normalize_path(&home.join(".skills-manager/skills"));
+    let allowed_base = normalize_path(&home.join(".qing-skill-manager/skills"));
     let requested_base = normalize_path(install_base_dir);
     if !requested_base.starts_with(&allowed_base) {
         return Err("安装目录不在允许范围内".to_string());
@@ -76,7 +76,7 @@ pub fn download_skill_to_dir(
         &[
             ("Accept", "application/vnd.github+json"),
             ("X-GitHub-Api-Version", "2022-11-28"),
-            ("User-Agent", "skills-manager-gui/0.1"),
+            ("User-Agent", "qing-skill-manager/0.1"),
         ],
     )?;
 

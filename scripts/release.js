@@ -56,7 +56,7 @@ function bumpVersion(nextVersion) {
   if (fs.existsSync(cargoLockPath)) {
     const cargoLock = fs.readFileSync(cargoLockPath, "utf8");
     const nextCargoLock = cargoLock.replace(
-      /(name = "skills-manager-gui"\nversion = ").*(")/,
+      /(name = "qing-skill-manager"\nversion = ").*(")/,
       `$1${nextVersion}$2`
     );
     fs.writeFileSync(cargoLockPath, nextCargoLock);

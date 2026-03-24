@@ -34,7 +34,7 @@ let status = if let Some(existing) = existing_names.get(&name) {
 
 ### 1.2 存储结构现状
 ```
-~/.skills-manager/skills/
+~/.qing-skill-manager/skills/
 ├── skill-a/
 │   └── SKILL.md
 ├── skill-b/
@@ -128,7 +128,7 @@ interface SkillDiff {
 ### 2.3 新的存储结构
 
 ```
-~/.skills-manager/
+~/.qing-skill-manager/
 ├── skills/
 │   └── packages/
 │       ├── skill-a_namespace-a/

@@ -31,8 +31,8 @@ const { t } = useI18n();
 // Mark components as used for template
 void [ProjectsPanel, ProjectAddModal, ProjectConfigModal, ProjectSkillImportModal, ConflictResolutionModal, VersionManagerModal, VersionDiffModal];
 
-const localeKey = "skillsManager.locale";
-const themeKey = "skillsManager.theme";
+const localeKey = "qingSkillManager.locale";
+const themeKey = "qingSkillManager.theme";
 
 const theme = ref<"light" | "dark">("light");
 const locale = ref<SupportedLocale>("zh-CN");

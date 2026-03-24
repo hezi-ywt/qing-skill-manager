@@ -1,6 +1,8 @@
-# Skills Manager 需求文档
+# Qing Skill Manager 需求文档
 
-本文档通过逆向工程从现有代码实现中提取，全面描述 Skills Manager 桌面应用的功能需求、用户故事和系统约束。
+> 致谢：本项目基于原始项目 [skills-manager](https://github.com/Rito-w/skills-manager) 进行重新包装与定制开发。
+
+本文档通过逆向工程从现有代码实现中提取，全面描述 Qing Skill Manager 桌面应用的功能需求、用户故事和系统约束。
 
 ---
 
@@ -8,7 +10,7 @@
 
 - **文档版本**: 1.0
 - **生成日期**: 2025年
-- **基于版本**: skills-manager-gui v0.3.21
+- **基于版本**: qing-skill-manager v0.3.21
 - **文档类型**: 逆向工程需求规格说明书 (PRD)
 
 ---
@@ -17,7 +19,7 @@
 
 ### 1.1 产品定位
 
-Skills Manager 是一款专业的跨平台 AI Skills 管理桌面应用，帮助开发者统一管理 AI 开发环境中的 skills（技能插件）。
+Qing Skill Manager 是一款专业的跨平台 AI Skills 管理桌面应用，帮助开发者统一管理 AI 开发环境中的 skills（技能插件）。
 
 ### 1.2 核心价值主张
 
@@ -38,7 +40,7 @@ Skills Manager 是一款专业的跨平台 AI Skills 管理桌面应用，帮助
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     Skills Manager                          │
+│                  Qing Skill Manager                        │
 ├─────────────┬─────────────┬─────────────┬───────────────────┤
 │  Local      │  Market     │  IDE        │  Projects         │
 │  Skills     │  市场       │  管理       │  项目管理         │
@@ -415,7 +417,7 @@ interface IdeOption {
 **描述**: 系统必须维护统一的 skill 存储位置
 
 **需求详情**:
-- 默认存储位置: `~/.skills-manager/skills/`
+- 默认存储位置: `~/.qing-skill-manager/skills/`
 - 每个 skill 是一个包含 `SKILL.md` 文件的目录
 - Skill 名称从 `SKILL.md` frontmatter 或目录名提取
 - 支持目录名清理（移除 Windows 保留名、特殊字符）
@@ -637,7 +639,7 @@ interface IdeOption {
 - SkillsMP: 需要 API 密钥，默认禁用
 
 #### BC-002: 存储约束
-- 默认存储位置: `~/.skills-manager/skills/`
+- 默认存储位置: `~/.qing-skill-manager/skills/`
 - Skill 识别: 必须包含 `SKILL.md` 文件
 - 命名约束: 清理后的目录名
 
@@ -685,14 +687,14 @@ interface IdeOption {
 **关键概念**:
 
 **托管 (managed)**:
-- 通过 Skills Manager 管理
-- 实际存储在 `~/.skills-manager/skills/`
+- 通过 Qing Skill Manager 管理
+- 实际存储在 `~/.qing-skill-manager/skills/`
 - IDE 目录中存在可识别的受管副本
 - 可以被统一管理（更新、卸载）
 
 **未托管 (unmanaged)**:
 - 用户手动复制到 IDE 目录
-- 不在 Skills Manager 控制下
+- 不在 Qing Skill Manager 控制下
 - 显示橙色边框标记
 - 需要先"纳管"才能统一管理
 
@@ -721,7 +723,7 @@ interface IdeOption {
 **方法 1: 纳管 + 重新安装**
 1. 在 **IDE 浏览**页面找到项目中的 skill（显示为"未托管"）
 2. 点击"纳管"按钮，执行 `adopt_ide_skill`:
-   - 将 skill 从项目目录**复制**到 `~/.skills-manager/skills/`
+- 将 skill 从项目目录**复制**到 `~/.qing-skill-manager/skills/`
    - 在项目目录恢复本地副本
 3. 在 **Local Skills** 页面选中刚纳管的 skill
 4. 点击"安装到编辑器"，选择全局 IDE
@@ -730,7 +732,7 @@ interface IdeOption {
 1. 在 **项目管理**页面选择项目
 2. 点击"从项目导出" / "扫描项目中的 Skills"
 3. 选择要导入的 skills，解决冲突（如果有）
-4. 执行 `import_local_skill` 复制到 `~/.skills-manager/skills/`
+4. 执行 `import_local_skill` 复制到 `~/.qing-skill-manager/skills/`
 5. 回到 **Local Skills** 页面，安装到全局 IDE
 
 **安装目标对比**:
@@ -739,8 +741,8 @@ interface IdeOption {
 |---------|---------|---------|----------|
 | **全局 IDE** | `~/.config/opencode/skills/` (copy) | 所有项目 | `clone_local_skill` |
 | **项目级** | `~/project/.config/opencode/skills/` (copy) | 仅该项目 | `clone_local_skill` |
-| **纳管** | 复制到 `~/.skills-manager/`，原位置恢复副本 | - | `adopt_ide_skill` |
-| **导入** | 复制到 `~/.skills-manager/skills/` | - | `import_local_skill` |
+| **纳管** | 复制到 `~/.qing-skill-manager/`，原位置恢复副本 | - | `adopt_ide_skill` |
+| **导入** | 复制到 `~/.qing-skill-manager/skills/` | - | `import_local_skill` |
 
 ---
 
@@ -777,18 +779,18 @@ interface IdeOption {
 
 | 键 | 用途 | 数据类型 |
 |---|---|---|
-| `skillsManager.locale` | 语言偏好 | string |
-| `skillsManager.theme` | 主题偏好 | string |
-| `skillsManager.ideOptions` | 自定义 IDE 配置 | JSON |
-| `skillsManager.lastInstallTargets` | 上次安装目标 | JSON |
-| `skillsManager.marketConfigs` | 市场 API 密钥 | JSON |
+| `qingSkillManager.locale` | 语言偏好 | string |
+| `qingSkillManager.theme` | 主题偏好 | string |
+| `qingSkillManager.ideOptions` | 自定义 IDE 配置 | JSON |
+| `qingSkillManager.lastInstallTargets` | 上次安装目标 | JSON |
+| `qingSkillManager.marketConfigs` | 市场 API 密钥 | JSON |
 | `market-enabled` | 市场启用状态 | JSON |
-| `skillsManager.projects` | 项目配置 | JSON |
+| `qingSkillManager.projects` | 项目配置 | JSON |
 
 ### 8.2 文件系统结构
 
 ```
-~/.skills-manager/
+~/.qing-skill-manager/
 └── skills/
     ├── skill-a/
     │   └── SKILL.md
@@ -834,13 +836,13 @@ interface IdeOption {
 | Skill | AI 开发环境中的功能插件，通常包含 SKILL.md 文件 |
 | Marketplace | 提供 skills 下载的在线服务 |
 | IDE | 集成开发环境，此处特指 AI 辅助编程工具 |
-| 纳管 | 将 IDE 中的 skill 纳入 Skills Manager 管理 |
+| 纳管 | 将 IDE 中的 skill 纳入 Qing Skill Manager 管理 |
 | 克隆/复制 | 通过 clone / copy 将 skill 安装到 IDE 目录 |
-| Manager | Skills Manager 应用本身 |
-| **托管 (managed)** | Skill 通过 Skills Manager 安装，并能与 manager 中的内容匹配 |
+| Manager | Qing Skill Manager 应用本身 |
+| **托管 (managed)** | Skill 通过 Qing Skill Manager 安装，并能与 manager 中的内容匹配 |
 | **未托管 (unmanaged)** | Skill 是用户手动复制到 IDE 目录的，不在 Manager 控制下，显示橙色边框标记 |
 | **托管副本 (managed copy)** | Skill 是复制到 IDE 的受管副本 |
-| **本地 (local)** | Skill 是实际目录，但未被 Skills Manager 纳管 |
+| **本地 (local)** | Skill 是实际目录，但未被 Qing Skill Manager 纳管 |
 | **全局 IDE 安装** | Skill 安装在 IDE 的全局配置目录（如 `~/.config/opencode/skills/`），对所有项目可用 |
 | **项目级安装** | Skill 安装在特定项目的 IDE 目录（如 `~/project/.config/opencode/skills/`），仅该项目可用 |
 

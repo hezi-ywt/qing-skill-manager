@@ -22,7 +22,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const VERSION_METADATA_FILE: &str = ".skills-manager-version.json";
+const VERSION_METADATA_FILE: &str = ".qing-skill-manager-version.json";
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "camelCase")]
@@ -98,7 +98,7 @@ fn now_timestamp() -> i64 {
 }
 
 fn manager_versions_root(home: &Path) -> PathBuf {
-    home.join(".skills-manager/versions")
+    home.join(".qing-skill-manager/versions")
 }
 
 fn build_skill_id(name: &str, namespace: Option<&str>) -> String {
@@ -128,7 +128,7 @@ fn package_state_path(home: &Path, skill_id: &str) -> PathBuf {
 }
 
 fn app_config_path(home: &Path) -> PathBuf {
-    home.join(".skills-manager/config.json")
+    home.join(".qing-skill-manager/config.json")
 }
 
 fn read_app_config(home: &Path) -> AppConfig {
@@ -651,7 +651,7 @@ fn remove_path(path: &Path) -> Result<(), String> {
 pub fn clone_local_skill(request: InstallRequest) -> Result<InstallResult, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
     let normalized_home = normalize_path(&home);
-    let manager_root_raw = home.join(".skills-manager/skills");
+    let manager_root_raw = home.join(".qing-skill-manager/skills");
     let manager_root =
         resolve_canonical(&manager_root_raw).unwrap_or_else(|| normalize_path(&manager_root_raw));
 
@@ -659,7 +659,7 @@ pub fn clone_local_skill(request: InstallRequest) -> Result<InstallResult, Strin
     let skill_canon = resolve_canonical(&skill_path)
         .ok_or_else(|| "Local skill path does not exist".to_string())?;
     if !skill_canon.starts_with(&manager_root) {
-        return Err("Local skill path must stay inside Skills Manager storage".to_string());
+        return Err("Local skill path must stay inside Qing Skill Manager storage".to_string());
     }
     let skill_path = skill_canon;
 
@@ -700,7 +700,7 @@ pub fn clone_local_skill(request: InstallRequest) -> Result<InstallResult, Strin
 pub fn scan_overview(request: LocalScanRequest) -> Result<Overview, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
 
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
     let mut manager_skills = collect_skills_from_dir(&manager_dir, "manager", None);
 
     // Resolve IDE directories: absolute paths are used directly, relative paths are joined with home
@@ -786,7 +786,7 @@ pub fn scan_overview(request: LocalScanRequest) -> Result<Overview, String> {
 #[tauri::command]
 pub fn uninstall_skill(request: UninstallRequest) -> Result<String, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let mut allowed_roots = vec![home.join(".skills-manager/skills")];
+    let mut allowed_roots = vec![home.join(".qing-skill-manager/skills")];
 
     let ide_dirs: Vec<String> = if request.ide_dirs.is_empty() {
         vec![
@@ -826,7 +826,7 @@ pub fn uninstall_skill(request: UninstallRequest) -> Result<String, String> {
         allowed_roots.push(base.join(".codex/skills"));
         allowed_roots.push(base.join(".trae/skills"));
         allowed_roots.push(base.join(".opencode/skill"));
-        allowed_roots.push(base.join(".skills-manager/skills"));
+    allowed_roots.push(base.join(".qing-skill-manager/skills"));
     }
 
     let target = PathBuf::from(&request.target_path);
@@ -850,7 +850,7 @@ pub fn uninstall_skill(request: UninstallRequest) -> Result<String, String> {
 #[tauri::command]
 pub fn import_local_skill(request: ImportRequest) -> Result<String, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
 
     let source_path = PathBuf::from(&request.source_path);
     if !source_path.exists() {
@@ -879,7 +879,7 @@ pub fn import_local_skill(request: ImportRequest) -> Result<String, String> {
 pub fn adopt_ide_skill(request: AdoptIdeSkillRequest) -> Result<String, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory".to_string())?;
     let normalized_home = normalize_path(&home);
-    let manager_root = home.join(".skills-manager/skills");
+    let manager_root = home.join(".qing-skill-manager/skills");
     fs::create_dir_all(&manager_root).map_err(|err| err.to_string())?;
 
     let target = PathBuf::from(&request.target_path);
@@ -938,8 +938,8 @@ pub fn adopt_ide_skill(request: AdoptIdeSkillRequest) -> Result<String, String> 
 #[tauri::command]
 pub fn delete_local_skills(request: DeleteLocalSkillRequest) -> Result<String, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_root = resolve_canonical(&home.join(".skills-manager/skills"))
-        .unwrap_or_else(|| normalize_path(&home.join(".skills-manager/skills")));
+    let manager_root = resolve_canonical(&home.join(".qing-skill-manager/skills"))
+        .unwrap_or_else(|| normalize_path(&home.join(".qing-skill-manager/skills")));
 
     if request.target_paths.is_empty() {
         return Err("No skills were provided for deletion".to_string());
@@ -952,7 +952,7 @@ pub fn delete_local_skills(request: DeleteLocalSkillRequest) -> Result<String, S
         let canonical =
             resolve_canonical(&target).ok_or_else(|| "Target skill does not exist".to_string())?;
         if !canonical.starts_with(&manager_root) {
-            return Err("Only Skills Manager local skills can be deleted".to_string());
+        return Err("Only Qing Skill Manager local skills can be deleted".to_string());
         }
         if canonical == manager_root {
             return Err("Refusing to delete the skills root directory".to_string());
@@ -1200,7 +1200,7 @@ pub fn resolve_skill_conflict(
 #[tauri::command]
 pub fn create_skill_version(request: CreateVersionRequest) -> Result<CreateVersionResponse, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
     let source_path = PathBuf::from(&request.source_path);
 
     if !source_path.exists() || !source_path.join("SKILL.md").exists() {
@@ -1254,7 +1254,7 @@ pub fn create_skill_version(request: CreateVersionRequest) -> Result<CreateVersi
 #[tauri::command]
 pub fn analyze_skill_conflict(request: AnalyzeConflictRequest) -> Result<ConflictAnalysis, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
     let existing_skills = collect_skills_from_dir(&manager_dir, "manager", None);
 
     let base_skill = existing_skills
@@ -1288,7 +1288,7 @@ pub fn analyze_skill_conflict(request: AnalyzeConflictRequest) -> Result<Conflic
 #[tauri::command]
 pub fn compare_skill_versions(request: crate::types::CompareVersionsRequest) -> Result<SkillDiff, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
     let package = get_skill_package(GetSkillPackageRequest {
         skill_id: request.skill_id,
     })?
@@ -1315,7 +1315,7 @@ pub fn compare_skill_versions(request: crate::types::CompareVersionsRequest) -> 
 #[tauri::command]
 pub fn list_skill_packages() -> Result<ListSkillPackagesResponse, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
     let mut packages = Vec::new();
     let mut seen: HashMap<String, bool> = HashMap::new();
     for skill in collect_skills_from_dir(&manager_dir, "manager", None) {
@@ -1349,7 +1349,7 @@ pub fn list_skill_packages() -> Result<ListSkillPackagesResponse, String> {
 #[tauri::command]
 pub fn get_skill_package(request: GetSkillPackageRequest) -> Result<GetSkillPackageResponse, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
 
     let package = collect_skills_from_dir(&manager_dir, "manager", None)
         .into_iter()
@@ -1372,7 +1372,7 @@ pub fn rename_skill_version(
     request: RenameVersionRequest,
 ) -> Result<RenameVersionResponse, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
     let skill = collect_skills_from_dir(&manager_dir, "manager", None)
         .into_iter()
         .find(|item| {
@@ -1401,7 +1401,7 @@ pub fn delete_skill_version(
     request: DeleteVersionRequest,
 ) -> Result<DeleteVersionResponse, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
-    let manager_dir = home.join(".skills-manager/skills");
+    let manager_dir = home.join(".qing-skill-manager/skills");
     let skill = collect_skills_from_dir(&manager_dir, "manager", None)
         .into_iter()
         .find(|item| {
@@ -1439,7 +1439,7 @@ pub fn delete_skill_version(
             })
         }
         DeleteStrategy::Archive => {
-            let archive_root = home.join(".skills-manager/archive");
+    let archive_root = home.join(".qing-skill-manager/archive");
             fs::create_dir_all(&archive_root).map_err(|err| err.to_string())?;
             let archive_path = archive_root.join(
                 skill_path
@@ -1843,7 +1843,7 @@ mod tests {
         let home = dirs::home_dir().expect("home dir");
         let unique = unique_test_name("clone-success");
         let root = home.join(".skills-manager-test").join(&unique);
-        let manager_root = home.join(".skills-manager/skills");
+        let manager_root = home.join(".qing-skill-manager/skills");
         let target_root = root.join("ide");
         fs::create_dir_all(&manager_root).expect("create manager root");
         fs::create_dir_all(&target_root).expect("create target root");
@@ -1879,7 +1879,7 @@ mod tests {
         let home = dirs::home_dir().expect("home dir");
         let unique = unique_test_name("clone-invalid");
         let root = home.join(".skills-manager-test").join(&unique);
-        let manager_root = home.join(".skills-manager/skills");
+        let manager_root = home.join(".qing-skill-manager/skills");
         fs::create_dir_all(&manager_root).expect("create manager root");
 
         let skill_dir = write_skill_dir(
@@ -1922,7 +1922,7 @@ mod tests {
         })
         .expect("adopt succeeds");
 
-        let manager_dir = home.join(".skills-manager/skills/demo-adopt-skill");
+        let manager_dir = home.join(".qing-skill-manager/skills/demo-adopt-skill");
         assert!(manager_dir.exists());
         assert!(manager_dir.join("SKILL.md").exists());
         assert!(ide_skill_dir.exists());
@@ -1937,7 +1937,7 @@ mod tests {
     fn scan_overview_marks_matching_copy_as_managed() {
         let home = dirs::home_dir().expect("home dir");
         let unique = unique_test_name("scan-overview");
-        let manager_root = home.join(".skills-manager/skills");
+        let manager_root = home.join(".qing-skill-manager/skills");
         fs::create_dir_all(&manager_root).expect("create manager root");
         let ide_root = home.join(".skills-manager-test").join(&unique).join("ide");
         fs::create_dir_all(&ide_root).expect("create ide root");
@@ -2046,7 +2046,7 @@ mod tests {
     fn scan_project_opencode_skills_marks_matching_managed_version() {
         let home = dirs::home_dir().expect("home dir");
         let unique = unique_test_name("project-scan-match");
-        let manager_root = home.join(".skills-manager/skills");
+        let manager_root = home.join(".qing-skill-manager/skills");
         let project_root = home.join(".skills-manager-test").join(&unique).join("project");
         let project_skills_root = project_root.join(".opencode/skills");
 
@@ -2086,7 +2086,7 @@ mod tests {
     fn scan_project_opencode_skills_marks_same_name_mismatch_as_conflict() {
         let home = dirs::home_dir().expect("home dir");
         let unique = unique_test_name("project-scan-conflict");
-        let manager_root = home.join(".skills-manager/skills");
+        let manager_root = home.join(".qing-skill-manager/skills");
         let project_root = home.join(".skills-manager-test").join(&unique).join("project");
         let project_skills_root = project_root.join(".opencode/skills");
 
@@ -2127,7 +2127,7 @@ mod tests {
     fn scan_project_opencode_skills_marks_same_name_non_default_match_as_managed_version() {
         let home = dirs::home_dir().expect("home dir");
         let unique = unique_test_name("project-scan-managed-version");
-        let manager_root = home.join(".skills-manager/skills");
+        let manager_root = home.join(".qing-skill-manager/skills");
         let project_root = home.join(".skills-manager-test").join(&unique).join("project");
         let project_skills_root = project_root.join(".opencode/skills");
 

@@ -5,8 +5,8 @@ import react from '@astrojs/react'
 import sitemap from '@astrojs/sitemap'
 
 export default defineConfig({
-  site: 'https://Rito-w.github.io',
-  base: '/skills-manager',
+  site: 'https://qing-claw.github.io',
+  base: '/qing-skill-manager',
   output: 'static',
   vite: {
     plugins: [tailwindcss()],
@@ -14,7 +14,7 @@ export default defineConfig({
   integrations: [
     react(),
     sitemap({
-      filter: (page) => page !== 'https://Rito-w.github.io/skills-manager/404',
+      filter: (page) => page !== 'https://qing-claw.github.io/qing-skill-manager/404',
     }),
   ],
 })

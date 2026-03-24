@@ -207,7 +207,7 @@ pub async fn search_marketplaces(
                 &url,
                 &[
                     ("Accept", "application/json"),
-                    ("User-Agent", "skills-manager-gui/0.1"),
+                    ("User-Agent", "qing-skill-manager/0.1"),
                 ],
             ) {
                 Ok(buf) => {
@@ -265,7 +265,7 @@ pub async fn search_marketplaces(
                 &skillsllm_url,
                 &[
                     ("Accept", "application/json"),
-                    ("User-Agent", "skills-manager-gui/0.1"),
+                    ("User-Agent", "qing-skill-manager/0.1"),
                 ],
             ) {
                 Ok(buf) => {
@@ -327,7 +327,7 @@ pub async fn search_marketplaces(
                     &skillsmp_url,
                     &[
                         ("Accept", "application/json"),
-                        ("User-Agent", "skills-manager-gui/0.1"),
+                        ("User-Agent", "qing-skill-manager/0.1"),
                         ("Authorization", &auth_header),
                     ],
                 ) {

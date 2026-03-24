@@ -1,9 +1,13 @@
-# Skills Manager
+# Qing Skill Manager
 
 [English](README.md) | [中文](README_zh-CN.md)
 
 **Quickly install skills to Global/Project**
-A professional cross-platform AI Skills Manager. It empowers you to search for skills across major marketplaces (such as Claude Plugins, SkillsLLM, SkillsMP, etc.), download them into a unified local repository, and securely distribute them into supported AI development environments. Fully compatible with Windows, macOS, and Linux out-of-the-box, infinitely expanding your AI programming assistants' capabilities.
+Qing Skill Manager is a forked and repackaged cross-platform AI Skills Manager. It lets you search for skills across major marketplaces (such as Claude Plugins, SkillsLLM, SkillsMP, etc.), download them into a unified local repository, and securely distribute them into supported AI development environments. Fully compatible with Windows, macOS, and Linux out-of-the-box.
+
+## Acknowledgement
+
+This project is built on top of the original [skills-manager](https://github.com/Rito-w/skills-manager). Thanks to the original author and contributors for creating the foundation this fork extends.
 
 ![Local](docs/screenshots/en-US/local.png)
 ![Market](docs/screenshots/en-US/market.png)
@@ -13,7 +17,7 @@ A professional cross-platform AI Skills Manager. It empowers you to search for s
 ## ✨ Core Features
 
 - 🔍 **Aggregated Market Search**: Search quality skills from public registries in one place
-- 📦 **Unified Local Repository**: Centralized management of downloaded skills (`~/.skills-manager/skills`)
+- 📦 **Unified Local Repository**: Centralized management of downloaded skills (`~/.qing-skill-manager/skills`)
 - 🚀 **One-Click Installation**: Install unified local skills to target IDEs in seconds
 - 🛠️ **Multi-Dimensional Management**: Browse skills per IDE, uninstall cleanly and safely
 - ⚙️ **Project Management**: Manage projects, clone skills into projects, and configure IDEs per project
@@ -45,7 +49,7 @@ A professional cross-platform AI Skills Manager. It empowers you to search for s
 Since Apple developer commercial signature is not configured yet, opening the app for the first time may trigger "App is damaged and can't be opened" or "from an unidentified developer" warnings. You can run the following terminal command to bypass it:
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/skills-manager-gui.app"
+xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
 ```
 
 ### 🔍 1) Market

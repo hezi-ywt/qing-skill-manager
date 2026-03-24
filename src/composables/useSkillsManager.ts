@@ -114,7 +114,7 @@ export function useSkillsManager() {
   );
   async function buildInstallBaseDir(): Promise<string> {
     const home = await homeDir();
-    return join(home, ".skills-manager/skills");
+    return join(home, ".qing-skill-manager/skills");
   }
 
   async function buildInstallTargets(targetLabel: string): Promise<LinkTarget[]> {

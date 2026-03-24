@@ -1,6 +1,8 @@
-# Skills Manager 开发文档
+# Qing Skill Manager 开发文档
 
-本文面向首次接手 `skills-manager` 的开发者，目标是回答四个问题：
+> 致谢：本项目基于原始项目 [skills-manager](https://github.com/Rito-w/skills-manager) 进行重新包装与定制开发。
+
+本文面向首次接手 `qing-skill-manager` 的开发者，目标是回答四个问题：
 
 1. 这个项目是干什么的
 2. 项目架构是怎么组织的
@@ -11,7 +13,7 @@
 
 ## 1. 项目概览
 
-`skills-manager` 是一个基于 **Tauri 2 + Vue 3 + TypeScript + Vite** 的桌面应用，用来统一管理 AI 开发环境中的 skills。
+`qing-skill-manager` 是一个基于 **Tauri 2 + Vue 3 + TypeScript + Vite** 的桌面应用，用来统一管理 AI 开发环境中的 skills。
 
 它的核心能力包括：
 
@@ -60,7 +62,7 @@
 项目主目录结构可以先这样理解：
 
 ```text
-skills-manager/
+qing-skill-manager/
 ├─ src/                 # Vue 前端源码
 │  ├─ components/       # 界面组件：Panel / Modal / Overlay
 │  ├─ composables/      # 业务状态与逻辑封装
@@ -402,13 +404,13 @@ Vue 组件
 
 已确认的 key 包括：
 
-- `skillsManager.locale`
-- `skillsManager.theme`
-- `skillsManager.ideOptions`
-- `skillsManager.lastInstallTargets`
-- `skillsManager.marketConfigs`
+- `qingSkillManager.locale`
+- `qingSkillManager.theme`
+- `qingSkillManager.ideOptions`
+- `qingSkillManager.lastInstallTargets`
+- `qingSkillManager.marketConfigs`
 - `market-enabled`
-- `skillsManager.projects`
+- `qingSkillManager.projects`
 
 这意味着：
 
@@ -523,7 +525,7 @@ pnpm release
 README 明确写了一个首次安装注意事项：
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/skills-manager-gui.app"
+xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
 ```
 
 原因是应用尚未配置 Apple 商业签名，首次打开可能被 Gatekeeper 阻止。
@@ -648,7 +650,7 @@ xattr -dr com.apple.quarantine "/Applications/skills-manager-gui.app"
 #### 关键概念
 
 **托管 vs 未托管**
-- **托管 (managed)**: 通过 Skills Manager 管理，并能与 manager 中的内容匹配
+- **托管 (managed)**: 通过 Qing Skill Manager 管理，并能与 manager 中的内容匹配
 - **未托管 (unmanaged)**: 用户手动复制到 IDE 目录，不在 Manager 控制下
 
 **链接 vs 本地**
@@ -678,7 +680,7 @@ xattr -dr com.apple.quarantine "/Applications/skills-manager-gui.app"
 ```rust
 invoke("clone_local_skill", {
   request: {
-    skillPath: "~/.skills-manager/skills/my-skill",
+    skillPath: "~/.qing-skill-manager/skills/my-skill",
     skillName: "my-skill",
     installTargets: [
       { name: "OpenCode", path: "~/.config/opencode/skills" }
@@ -688,7 +690,7 @@ invoke("clone_local_skill", {
 ```
 
 **实际执行**（Rust 后端）:
-1. **验证**: 确认 skill 路径在 `~/.skills-manager/skills/` 内
+1. **验证**: 确认 skill 路径在 `~/.qing-skill-manager/skills/` 内
 2. **复制目录**: 在 IDE 目录创建 skill 的物理副本
 3. **返回结果**: 哪些目标安装成功，哪些被跳过
 
@@ -703,7 +705,7 @@ invoke("clone_local_skill", {
 
 2. **点击"纳管"按钮**
    - 执行 `adopt_ide_skill` 命令
-   - 将 skill 从项目目录**复制**到 `~/.skills-manager/skills/`
+   - 将 skill 从项目目录**复制**到 `~/.qing-skill-manager/skills/`
    - 在项目目录恢复一份本地副本
    - 现在 skill 已是"托管"状态
 
@@ -723,7 +725,7 @@ invoke("clone_local_skill", {
 2. **导入到本地**
    - 选择要导入的 skills
    - 解决冲突（如果有）
-   - 执行 `import_local_skill` 将 skill 复制到 `~/.skills-manager/skills/`
+   - 执行 `import_local_skill` 将 skill 复制到 `~/.qing-skill-manager/skills/`
 
 3. **安装到全局 IDE**
    - 回到 Local Skills 页面
@@ -736,8 +738,8 @@ invoke("clone_local_skill", {
 |---------|---------|---------|------|
 | **全局 IDE** | `~/.config/opencode/skills/` (copy) | 所有项目 | `clone_local_skill` |
 | **项目级** | `~/project/.config/opencode/skills/` (copy) | 仅该项目 | `clone_local_skill` |
-| **纳管** | 复制到 `~/.skills-manager/`，原位置恢复副本 | - | `adopt_ide_skill` |
-| **导入** | 复制到 `~/.skills-manager/skills/` | - | `import_local_skill` |
+| **纳管** | 复制到 `~/.qing-skill-manager/`，原位置恢复副本 | - | `adopt_ide_skill` |
+| **导入** | 复制到 `~/.qing-skill-manager/skills/` | - | `import_local_skill` |
 
 ---
 
@@ -823,7 +825,7 @@ invoke("clone_local_skill", {
 
 如果要用一句话概括这个项目：
 
-> `skills-manager` 是一个以 `App.vue + useSkillsManager + Tauri commands` 为主轴的桌面技能管理器；前端负责流程与状态组织，Rust 负责本地系统能力，项目当前实现重心偏向 OpenCode 场景。
+> `qing-skill-manager` 是一个以 `App.vue + useSkillsManager + Tauri commands` 为主轴的桌面技能管理器；前端负责流程与状态组织，Rust 负责本地系统能力，项目当前实现重心偏向 OpenCode 场景。
 
 如果你要开始改功能，默认优先检查这三处：
 

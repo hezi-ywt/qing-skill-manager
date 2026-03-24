@@ -133,7 +133,7 @@ export default {
     title: "确认卸载",
     hint: "将移除该 IDE 下的已安装技能目录，无法恢复。",
     deleteTitle: "确认删除本地 Skill",
-    deleteHint: "将从 Skills Manager 本地仓库删除所选 Skill，无法恢复。",
+    deleteHint: "将从 Qing Skill Manager 本地仓库删除所选 Skill，无法恢复。",
     cancel: "取消",
     confirm: "确认卸载",
     deleteConfirm: "确认删除"
