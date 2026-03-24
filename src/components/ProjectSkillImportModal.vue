@@ -12,6 +12,7 @@ const props = defineProps<{
     skills: ProjectSkill[];
     newCount: number;
     duplicateCount: number;
+    managedVersionCount: number;
     conflictCount: number;
   } | null;
 }>();
@@ -32,6 +33,10 @@ const newSkills = computed(() =>
 
 const duplicateSkills = computed(() => 
   props.scanResult?.skills.filter(s => s.status === "duplicate") ?? []
+);
+
+const managedVersionSkills = computed(() =>
+  props.scanResult?.skills.filter(s => s.status === "managed_version") ?? []
 );
 
 const conflictSkills = computed(() => 
@@ -74,6 +79,7 @@ function getStatusLabel(status: string): string {
   switch (status) {
     case "new": return t("projects.newSkills");
     case "duplicate": return t("projects.duplicateSkills");
+    case "managed_version": return t("projects.importedManagedVersions");
     case "conflict": return t("projects.conflictSkills");
     default: return status;
   }
@@ -83,6 +89,7 @@ function getStatusClass(status: string): string {
   switch (status) {
     case "new": return "status-new";
     case "duplicate": return "status-duplicate";
+    case "managed_version": return "status-duplicate";
     case "conflict": return "status-conflict";
     default: return "";
   }
@@ -107,6 +114,10 @@ function getStatusClass(status: string): string {
             <div class="summary-item">
               <span class="count duplicate">{{ scanResult.duplicateCount }}</span>
               <span class="label">{{ t("projects.duplicateSkills") }}</span>
+            </div>
+            <div v-if="scanResult.managedVersionCount > 0" class="summary-item">
+              <span class="count duplicate">{{ scanResult.managedVersionCount }}</span>
+              <span class="label">{{ t("projects.importedManagedVersions") }}</span>
             </div>
             <div class="summary-item">
               <span class="count conflict">{{ scanResult.conflictCount }}</span>
@@ -174,6 +185,31 @@ function getStatusClass(status: string): string {
                     {{ skill.currentVersion.displayName }}
                   </div>
                   <div class="skill-path">{{ skill.path }}</div>
+                </div>
+                <span class="status-badge" :class="getStatusClass(skill.status)">
+                  {{ getStatusLabel(skill.status) }}
+                </span>
+              </div>
+            </div>
+
+            <div v-if="managedVersionSkills.length > 0" class="skill-group">
+              <h4 class="group-title">{{ t("projects.importedManagedVersions") }}</h4>
+              <div
+                v-for="skill in managedVersionSkills"
+                :key="skill.path"
+                class="skill-item disabled"
+              >
+                <input type="checkbox" disabled />
+                <div class="skill-info">
+                  <div class="skill-name">{{ skill.name }}</div>
+                  <div class="skill-desc">{{ skill.description || "-" }}</div>
+                  <div v-if="skill.currentVersion" class="skill-version">
+                    {{ t("version.sourceProject") }} · {{ skill.currentVersion.displayName }}
+                  </div>
+                  <div class="skill-path">{{ skill.path }}</div>
+                  <div v-if="skill.matchedVersionName" class="existing-info">
+                    <span class="existing-label">{{ t("projects.matchesManagedVersion", { name: skill.matchedVersionName }) }}</span>
+                  </div>
                 </div>
                 <span class="status-badge" :class="getStatusClass(skill.status)">
                   {{ getStatusLabel(skill.status) }}

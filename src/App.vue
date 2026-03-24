@@ -2,8 +2,8 @@
 import { onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { i18n, supportedLocales, type SupportedLocale } from "./i18n";
+import { buildProjectCloneTargetPath } from "./composables/constants";
 import { useSkillsManager } from "./composables/useSkillsManager";
-import { useUpdateStore } from "./composables/useUpdateStore";
 import { useProjectConfig } from "./composables/useProjectConfig";
 import { useToast } from "./composables/useToast";
 import { getErrorMessage } from "./composables/utils";
@@ -60,11 +60,10 @@ onMounted(() => {
   i18n.global.locale.value = locale.value;
   applyTheme(theme.value);
 
-  // Check for updates on startup
-  checkOnStartup();
-  
   // Load projects
   loadProjects();
+  void refreshProjectSkillSnapshots();
+  restartProjectSnapshotRefreshLoop();
 });
 
 watch(locale, (next) => {
@@ -154,9 +153,6 @@ const {
   closeVersionDiffModal
 } = useSkillsManager();
 
-// Update store for startup check and badge
-const { updateAvailable, checkOnStartup } = useUpdateStore();
-
 // Toast
 const toast = useToast();
 
@@ -171,6 +167,17 @@ const {
   updateProjectIdeTargets,
   updateDetectedIdeDirs
 } = useProjectConfig();
+
+watch(projects, () => {
+  void refreshProjectSkillSnapshots();
+  restartProjectSnapshotRefreshLoop();
+}, { deep: true });
+
+watch(activeTab, (tab) => {
+  if (tab === "projects") {
+    void refreshProjectSkillSnapshots();
+  }
+});
 
 const showProjectAddModal = ref(false);
 const showProjectConfigModal = ref(false);
@@ -265,6 +272,8 @@ async function handleConflictResolution(resolution: "keep" | "overwrite" | "coex
       await scanProjectSkills(project.path);
     }
   }
+
+  await refreshProjectSkillSnapshots();
 }
 
 async function handleImportSelected(skillPaths: string[]) {
@@ -298,6 +307,7 @@ async function handleImportSelected(skillPaths: string[]) {
 
     showProjectImportModal.value = false;
     await scanLocalSkills();
+    await refreshProjectSkillSnapshots();
   } catch (err) {
     toast.error(getErrorMessage(err, t("errors.importFailed")));
   } finally {
@@ -321,6 +331,11 @@ async function handleResolveConflictFromImport(skill: ProjectSkill) {
 function handleManageVersions(skill: LocalSkill) {
   currentManagedSkillPath.value = skill.path;
   selectedCreateVersionSourcePath.value = "";
+  versionImportProjectSkills.value = [];
+  versionImportProjectId.value = selectedProjectId.value;
+  if (selectedProjectId.value) {
+    void handlePickVersionImportProject(selectedProjectId.value);
+  }
   openVersionManagerModal(skill.currentVersion?.skillId || skill.id);
 }
 
@@ -329,6 +344,11 @@ const comparingToVersion = ref<SkillVersion | null>(null);
 const currentDiff = ref<SkillDiff | null>(null);
 const currentManagedSkillPath = ref("");
 const selectedCreateVersionSourcePath = ref("");
+const versionImportProjectId = ref<string | null>(null);
+const versionImportProjectSkills = ref<ProjectSkill[]>([]);
+const versionImportProjectSkillsLoading = ref(false);
+const projectSkillSnapshots = ref<Record<string, ProjectSkill[]>>({});
+let projectSnapshotRefreshTimer: number | null = null;
 
 async function handleCompareVersions(fromVersionId: string, toVersionId: string) {
   if (!currentSkillPackage.value) return;
@@ -369,6 +389,46 @@ async function handlePickSourcePath() {
   }
 
   selectedCreateVersionSourcePath.value = selected;
+}
+
+async function handlePickVersionImportProject(projectId: string) {
+  const project = projects.value.find((item) => item.id === projectId);
+  versionImportProjectId.value = projectId;
+  versionImportProjectSkills.value = [];
+
+  if (!project) {
+    return;
+  }
+
+  versionImportProjectSkillsLoading.value = true;
+  try {
+    const result = await scanProjectSkills(project.path, { silent: true });
+    versionImportProjectSkills.value = result?.skills ?? [];
+    projectSkillSnapshots.value = {
+      ...projectSkillSnapshots.value,
+      [project.id]: result?.skills ?? []
+    };
+  } finally {
+    versionImportProjectSkillsLoading.value = false;
+  }
+}
+
+async function refreshProjectSkillSnapshots() {
+  const nextSnapshots: Record<string, ProjectSkill[]> = {};
+  for (const project of projects.value) {
+    const result = await scanProjectSkills(project.path, { silent: true });
+    nextSnapshots[project.id] = result?.skills ?? [];
+  }
+  projectSkillSnapshots.value = nextSnapshots;
+}
+
+function restartProjectSnapshotRefreshLoop() {
+  if (projectSnapshotRefreshTimer !== null) {
+    window.clearInterval(projectSnapshotRefreshTimer);
+  }
+  projectSnapshotRefreshTimer = window.setInterval(() => {
+    void refreshProjectSkillSnapshots();
+  }, 30000);
 }
 
 async function handleRenameVersion(versionId: string, newName: string) {
@@ -420,11 +480,11 @@ async function handleUpdateVariant(
   });
 }
 
-async function handleLinkSkillsToProject(skillIds: string[], ideLabels: string[]) {
+async function handleCloneSkillsToProject(skillIds: string[], ideLabels: string[]) {
   if (!configuringProject.value) return;
 
   busy.value = true;
-  busyText.value = t("messages.linkingSkills");
+  busyText.value = t("messages.cloningSkillsToProject");
 
   try {
     let successCount = 0;
@@ -435,37 +495,28 @@ async function handleLinkSkillsToProject(skillIds: string[], ideLabels: string[]
       if (!skill) continue;
 
       try {
-        // Build link targets for the project's IDE directories
-        const linkTargets = [];
+        const installTargets = [];
         for (const ideLabel of ideLabels) {
-          const target = ideOptions.value.find(opt => opt.label === ideLabel);
-          if (!target) continue;
-
           const projectPath = configuringProject.value.path;
-          // Use projectDir if available (for OpenCode it's .opencode/skills)
-          // Otherwise fall back to globalDir behavior
-          const ideDir = target.projectDir 
-            ? `${projectPath}/${target.projectDir}`
-            : target.globalDir.startsWith('.') 
-              ? `${projectPath}/${target.globalDir}`
-              : target.globalDir;
+          const ideDir = buildProjectCloneTargetPath(projectPath, ideLabel);
+          if (!ideDir) continue;
           
-          linkTargets.push({
+          installTargets.push({
             name: ideLabel,
             path: ideDir
           });
         }
 
-        if (linkTargets.length === 0) {
+        if (installTargets.length === 0) {
           failCount++;
           continue;
         }
 
-        await invoke("link_local_skill", {
+        await invoke("clone_local_skill", {
           request: {
             skillPath: skill.path,
             skillName: skill.name,
-            linkTargets
+            installTargets
           }
         });
         successCount++;
@@ -475,14 +526,15 @@ async function handleLinkSkillsToProject(skillIds: string[], ideLabels: string[]
     }
 
     if (successCount > 0) {
-      toast.success(t("messages.skillsLinked", { success: successCount, failed: failCount }));
+      toast.success(t("messages.skillsClonedToProject", { success: successCount, failed: failCount }));
       showProjectImportModal.value = false;
       await scanLocalSkills();
+      await refreshProjectSkillSnapshots();
     } else {
-      toast.error(t("errors.linkFailed"));
+      toast.error(t("errors.cloneToProjectFailed"));
     }
   } catch (err) {
-    toast.error(getErrorMessage(err, t("errors.linkFailed")));
+    toast.error(getErrorMessage(err, t("errors.cloneToProjectFailed")));
   } finally {
     busy.value = false;
     busyText.value = "";
@@ -525,7 +577,6 @@ async function handleLinkSkillsToProject(skillIds: string[], ideLabels: string[]
           @click="activeTab = 'settings'"
         >
           {{ t("app.tabs.settings") }}
-          <span v-if="updateAvailable" class="tab-badge"></span>
         </button>
       </div>
       <div class="header-controls">
@@ -631,13 +682,14 @@ async function handleLinkSkillsToProject(skillIds: string[], ideLabels: string[]
       </template>
 
       <template v-else-if="activeTab === 'projects'">
-        <ProjectsPanel
-          :projects="projects"
-          :selected-project-id="selectedProjectId"
-          :local-skills="localSkills"
-          :ide-options="ideOptions"
-          :local-loading="localLoading"
-          @add-project="handleAddProject"
+      <ProjectsPanel
+        :projects="projects"
+        :selected-project-id="selectedProjectId"
+        :local-skills="localSkills"
+        :ide-options="ideOptions"
+        :project-skill-snapshots="projectSkillSnapshots"
+        :local-loading="localLoading"
+        @add-project="handleAddProject"
           @remove-project="handleRemoveProject"
           @select-project="handleSelectProject"
           @configure-project="handleConfigureProject"
@@ -702,7 +754,7 @@ async function handleLinkSkillsToProject(skillIds: string[], ideLabels: string[]
       :project="configuringProject"
       :local-skills="localSkills"
       @close="showProjectImportModal = false"
-      @link="handleLinkSkillsToProject"
+      @clone="handleCloneSkillsToProject"
     />
 
     <VersionManagerModal
@@ -710,6 +762,10 @@ async function handleLinkSkillsToProject(skillIds: string[], ideLabels: string[]
       :skill-package="currentSkillPackage"
       :current-skill-path="currentManagedSkillPath"
       :selected-source-path="selectedCreateVersionSourcePath"
+      :projects="projects"
+      :project-skills="versionImportProjectSkills"
+      :selected-project-id="versionImportProjectId"
+      :project-skills-loading="versionImportProjectSkillsLoading"
       :loading="versionLoading"
       @close="closeVersionManagerModal"
       @rename="handleRenameVersion"
@@ -718,6 +774,7 @@ async function handleLinkSkillsToProject(skillIds: string[], ideLabels: string[]
       @compare="handleCompareVersions"
       @create-version="handleCreateVersion"
       @pick-source-path="handlePickSourcePath"
+      @pick-project="handlePickVersionImportProject"
       @create-variant="handleCreateVariant"
       @update-variant="handleUpdateVariant"
       @delete-variant="handleDeleteVariant"

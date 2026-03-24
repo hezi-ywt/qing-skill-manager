@@ -173,7 +173,7 @@ function adoptSelected() {
                 {{
                   skill.ide +
                   " · " +
-                  (skill.source === "link" ? t("ide.sourceLink") : t("ide.sourceLocal")) +
+                  (skill.source === "managed" ? t("ide.sourceManaged") : t("ide.sourceLocal")) +
                   (!skill.managed ? ` · ${t("ide.unmanaged")}` : "")
                 }}
               </div>

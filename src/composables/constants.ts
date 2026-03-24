@@ -49,3 +49,20 @@ export const defaultEnabledMarkets: Record<string, boolean> = {
 export const ideDirMappings: Array<{ label: string; path: string; projectPath?: string }> = [
   { label: "OpenCode", path: ".config/opencode/skills", projectPath: ".opencode/skills" }
 ];
+
+export function getProjectIdeRelativeDir(ideLabel: string): string | null {
+  const mapping = ideDirMappings.find((item) => item.label === ideLabel);
+  if (!mapping) return null;
+  return mapping.projectPath || mapping.path;
+}
+
+export function buildProjectCloneTargetPath(projectPath: string, ideLabel: string): string | null {
+  const relativeDir = getProjectIdeRelativeDir(ideLabel);
+  if (!relativeDir) return null;
+
+  if (relativeDir.startsWith("/")) {
+    return relativeDir;
+  }
+
+  return `${projectPath}/${relativeDir}`;
+}

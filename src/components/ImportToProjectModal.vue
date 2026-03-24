@@ -13,7 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "link", skillIds: string[], ideLabels: string[]): void;
+  (e: "clone", skillIds: string[], ideLabels: string[]): void;
 }>();
 
 const searchQuery = ref("");
@@ -32,7 +32,7 @@ const filteredSkills = computed(() => {
   );
 });
 
-const alreadyLinkedSkills = computed(() => {
+const projectCopiedSkills = computed(() => {
   const labels = projectIdeLabels.value;
   return props.localSkills.filter(skill => 
     labels.some(label => skill.usedBy.includes(label))
@@ -40,7 +40,7 @@ const alreadyLinkedSkills = computed(() => {
 });
 
 const availableSkills = computed(() => {
-  const linkedIds = new Set(alreadyLinkedSkills.value.map(s => s.id));
+  const linkedIds = new Set(projectCopiedSkills.value.map(s => s.id));
   return filteredSkills.value.filter(skill => !linkedIds.has(skill.id));
 });
 
@@ -66,16 +66,16 @@ function handleClose() {
   emit("close");
 }
 
-function handleLink() {
+function handleClone() {
   const ids = Array.from(selectedSkills.value);
   if (ids.length === 0 || projectIdeLabels.value.length === 0) return;
   
-  emit("link", ids, projectIdeLabels.value);
+  emit("clone", ids, projectIdeLabels.value);
   selectedSkills.value.clear();
   searchQuery.value = "";
 }
 
-function getLinkedLabels(skill: LocalSkill): string[] {
+function getInstalledLabels(skill: LocalSkill): string[] {
   return projectIdeLabels.value.filter(label => skill.usedBy.includes(label));
 }
 </script>
@@ -85,7 +85,7 @@ function getLinkedLabels(skill: LocalSkill): string[] {
     <div v-if="show && project" class="modal-overlay" @click.self="handleClose">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ t("projects.importSkills") }}</h3>
+          <h3>{{ t("projects.cloneSkillsToProject") }}</h3>
           <button class="close-btn" @click="handleClose">×</button>
         </div>
 
@@ -117,8 +117,8 @@ function getLinkedLabels(skill: LocalSkill): string[] {
           <div class="list-header">
             <div class="stats">
               {{ t("local.total", { count: availableSkills.length }) }} 
-              <span v-if="alreadyLinkedSkills.length > 0" class="linked-count">
-                ({{ alreadyLinkedSkills.length }} {{ t("local.linked") }})
+              <span v-if="projectCopiedSkills.length > 0" class="linked-count">
+                ({{ projectCopiedSkills.length }} {{ t("projects.alreadyCopiedToProject") }})
               </span>
             </div>
             <div class="actions">
@@ -132,9 +132,8 @@ function getLinkedLabels(skill: LocalSkill): string[] {
           </div>
 
           <div class="skills-list">
-            <!-- Already linked skills (show as disabled) -->
             <div 
-              v-for="skill in alreadyLinkedSkills" 
+              v-for="skill in projectCopiedSkills" 
               :key="skill.id"
               class="skill-item linked"
             >
@@ -145,7 +144,7 @@ function getLinkedLabels(skill: LocalSkill): string[] {
                 <div class="skill-desc">{{ skill.description || "-" }}</div>
                 <div class="skill-linked-labels">
                   <span class="linked-badge">
-                    {{ t("local.linked") }}: {{ getLinkedLabels(skill).join(", ") }}
+                    {{ t("projects.copiedProjectTargets") }}: {{ getInstalledLabels(skill).join(", ") }}
                   </span>
                 </div>
               </div>
@@ -177,12 +176,12 @@ function getLinkedLabels(skill: LocalSkill): string[] {
               </div>
             </div>
 
-            <div v-if="availableSkills.length === 0 && alreadyLinkedSkills.length === 0" class="empty-state">
+            <div v-if="availableSkills.length === 0 && projectCopiedSkills.length === 0" class="empty-state">
               {{ t("local.emptyHint") }}
             </div>
 
             <div v-else-if="availableSkills.length === 0" class="empty-state">
-              {{ t("projects.allSkillsLinked") }}
+              {{ t("projects.allSkillsCopiedToProject") }}
             </div>
           </div>
         </div>
@@ -194,9 +193,9 @@ function getLinkedLabels(skill: LocalSkill): string[] {
           <button
             class="primary"
             :disabled="selectedSkills.size === 0 || project.ideTargets.length === 0"
-            @click="handleLink"
+            @click="handleClone"
           >
-            {{ t("projects.linkSelected", { count: selectedSkills.size }) }}
+            {{ t("projects.cloneSelected", { count: selectedSkills.size }) }}
           </button>
         </div>
       </div>

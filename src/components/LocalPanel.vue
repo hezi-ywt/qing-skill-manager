@@ -195,6 +195,9 @@ function deleteSelected() {
           <span class="version-meta-text">
             {{ t("version.totalVersions") }}: {{ skill.versionCount }}
           </span>
+          <span class="version-meta-text version-default-hint">
+            {{ t("version.defaultVersion") }}
+          </span>
         </div>
         <div class="card-link">{{ skill.path }}</div>
         <div class="ide-badges">
@@ -295,6 +298,10 @@ function deleteSelected() {
 .version-meta-text {
   color: var(--color-muted);
   font-size: 12px;
+}
+
+.version-default-hint {
+  font-weight: 600;
 }
 
 .ide-badges {

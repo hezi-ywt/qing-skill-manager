@@ -16,6 +16,7 @@ import type {
 } from "./types";
 import { useIdeConfig } from "./useIdeConfig";
 import { useMarketConfig } from "./useMarketConfig";
+import { buildProjectCloneTargetPath } from "./constants";
 import { isSafeRelativePath, getErrorMessage, isSafeAbsolutePath } from "./utils";
 
 export function useSkillsManager() {
@@ -116,7 +117,7 @@ export function useSkillsManager() {
     return join(home, ".skills-manager/skills");
   }
 
-  async function buildLinkTargets(targetLabel: string): Promise<LinkTarget[]> {
+  async function buildInstallTargets(targetLabel: string): Promise<LinkTarget[]> {
     const target = ideOptions.value.find((option) => option.label === targetLabel);
     if (!target) return [];
 
@@ -325,23 +326,23 @@ export function useSkillsManager() {
     }
   }
 
-  async function linkSkillInternal(skill: LocalSkill, ideLabel: string, skipScan = false, suppressToast = false) {
-    const linkTargets = await buildLinkTargets(ideLabel);
-    if (linkTargets.length === 0) {
+  async function cloneSkillToIdeInternal(skill: LocalSkill, ideLabel: string, skipScan = false, suppressToast = false) {
+    const installTargets = await buildInstallTargets(ideLabel);
+    if (installTargets.length === 0) {
       throw new Error(t("errors.selectValidIde"));
     }
-    const result = (await invoke("link_local_skill", {
+    const result = (await invoke("clone_local_skill", {
       request: {
         skillPath: skill.path,
         skillName: skill.name,
-        linkTargets
+        installTargets
       }
     })) as InstallResult;
 
-    const linkedCount = result.linked.length;
+    const installedCount = result.installed.length;
     const skippedCount = result.skipped.length;
     if (!suppressToast) {
-      toast.success(t("messages.handled", { linked: linkedCount, skipped: skippedCount }));
+      toast.success(t("messages.handled", { installed: installedCount, skipped: skippedCount }));
     }
     if (!skipScan) {
       await scanLocalSkills();
@@ -383,7 +384,7 @@ export function useSkillsManager() {
       busyText.value = t("messages.installing");
 
       try {
-        let totalLinked = 0;
+        let totalInstalled = 0;
         let totalSkipped = 0;
         
         // Get selected projects
@@ -393,14 +394,14 @@ export function useSkillsManager() {
         for (const skill of installTargetSkills.value) {
           for (const project of selectedProjects) {
             for (const ideLabel of project.ideTargets) {
-              const result = await linkSkillToProjectInternal(skill, project.path, ideLabel, true, true);
-              totalLinked += result.linked.length;
+              const result = await cloneSkillToProjectInternal(skill, project.path, ideLabel, true, true);
+              totalInstalled += result.installed.length;
               totalSkipped += result.skipped.length;
             }
           }
         }
         
-        toast.success(t("messages.handled", { linked: totalLinked, skipped: totalSkipped }));
+        toast.success(t("messages.handled", { installed: totalInstalled, skipped: totalSkipped }));
         await scanLocalSkills();
         showInstallModal.value = false;
         installTargetSkills.value = [];
@@ -425,19 +426,19 @@ export function useSkillsManager() {
     busyText.value = t("messages.installing");
 
     try {
-      let totalLinked = 0;
+      let totalInstalled = 0;
       let totalSkipped = 0;
       
       // Install to global IDE directories
       for (const skill of installTargetSkills.value) {
         for (const label of targetIds) {
-          const result = await linkSkillInternal(skill, label, true, true);
-          totalLinked += result.linked.length;
+          const result = await cloneSkillToIdeInternal(skill, label, true, true);
+          totalInstalled += result.installed.length;
           totalSkipped += result.skipped.length;
         }
       }
       
-      toast.success(t("messages.handled", { linked: totalLinked, skipped: totalSkipped }));
+      toast.success(t("messages.handled", { installed: totalInstalled, skipped: totalSkipped }));
       await scanLocalSkills();
       showInstallModal.value = false;
       installTargetSkills.value = [];
@@ -450,23 +451,23 @@ export function useSkillsManager() {
     }
   }
 
-  async function linkSkillToProjectInternal(skill: LocalSkill, projectPath: string, ideLabel: string, skipScan = false, suppressToast = false) {
-    const linkTargets = await buildProjectLinkTargets(projectPath, ideLabel);
-    if (linkTargets.length === 0) {
+  async function cloneSkillToProjectInternal(skill: LocalSkill, projectPath: string, ideLabel: string, skipScan = false, suppressToast = false) {
+    const installTargets = await buildProjectInstallTargets(projectPath, ideLabel);
+    if (installTargets.length === 0) {
       throw new Error(t("errors.selectValidIde"));
     }
-    const result = (await invoke("link_local_skill", {
+    const result = (await invoke("clone_local_skill", {
       request: {
         skillPath: skill.path,
         skillName: skill.name,
-        linkTargets
+        installTargets
       }
     })) as InstallResult;
 
-    const linkedCount = result.linked.length;
+    const installedCount = result.installed.length;
     const skippedCount = result.skipped.length;
     if (!suppressToast) {
-      toast.success(t("messages.handled", { linked: linkedCount, skipped: skippedCount }));
+      toast.success(t("messages.handled", { installed: installedCount, skipped: skippedCount }));
     }
     if (!skipScan) {
       await scanLocalSkills();
@@ -474,15 +475,13 @@ export function useSkillsManager() {
     return result;
   }
 
-  async function buildProjectLinkTargets(projectPath: string, ideLabel: string): Promise<LinkTarget[]> {
+  async function buildProjectInstallTargets(projectPath: string, ideLabel: string): Promise<LinkTarget[]> {
     const target = ideOptions.value.find((option) => option.label === ideLabel);
     if (!target) return [];
 
-    const dir = target.globalDir;
+    const skillPath = buildProjectCloneTargetPath(projectPath, ideLabel);
+    if (!skillPath) return [];
 
-    // Build project-specific path
-    const skillPath = dir.startsWith("/") ? dir : `${projectPath}/${dir}`;
-    
     return [{ name: `${target.label} (${projectPath.split('/').pop()})`, path: skillPath }];
   }
 
@@ -711,9 +710,12 @@ export function useSkillsManager() {
   const showConflictModal = ref(false);
   const currentConflictSkill = ref<ProjectSkill | null>(null);
 
-  async function scanProjectSkills(projectPath: string): Promise<ProjectSkillScanResult | null> {
-    busy.value = true;
-    busyText.value = t("messages.scanningProject");
+  async function scanProjectSkills(projectPath: string, options?: { silent?: boolean }): Promise<ProjectSkillScanResult | null> {
+    const silent = options?.silent === true;
+    if (!silent) {
+      busy.value = true;
+      busyText.value = t("messages.scanningProject");
+    }
     try {
       const installBaseDir = await buildInstallBaseDir();
       const result = await invoke("scan_project_opencode_skills", {
@@ -725,11 +727,15 @@ export function useSkillsManager() {
       projectSkillScanResult.value = result;
       return result;
     } catch (err) {
-      toast.error(getErrorMessage(err, t("errors.scanProjectFailed")));
+      if (!silent) {
+        toast.error(getErrorMessage(err, t("errors.scanProjectFailed")));
+      }
       return null;
     } finally {
-      busy.value = false;
-      busyText.value = "";
+      if (!silent) {
+        busy.value = false;
+        busyText.value = "";
+      }
     }
   }
 

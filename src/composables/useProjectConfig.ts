@@ -1,6 +1,6 @@
 import { ref, computed } from "vue";
 import type { ProjectConfig, ProjectIdeDir } from "./types";
-import { ideDirMappings, STORAGE_KEYS } from "./constants";
+import { buildProjectCloneTargetPath, STORAGE_KEYS } from "./constants";
 
 function loadProjectsFromStorage(): ProjectConfig[] {
   try {
@@ -99,17 +99,11 @@ export function useProjectConfig() {
 
   function getProjectLinkTargets(project: ProjectConfig): Array<{ name: string; path: string }> {
     return project.ideTargets.map((ideLabel) => {
-      const ideConfig = ideDirMappings.find((m: { label: string; path: string }) => m.label === ideLabel);
-      if (!ideConfig) {
+      const targetPath = buildProjectCloneTargetPath(project.path, ideLabel);
+      if (!targetPath) {
         return { name: ideLabel, path: "" };
       }
-
-      if (ideConfig.path.startsWith("/")) {
-        return { name: ideLabel, path: ideConfig.path };
-      }
-
-      const projectPath = project.path;
-      return { name: ideLabel, path: `${projectPath}/${ideConfig.path}` };
+      return { name: ideLabel, path: targetPath };
     }).filter((t) => t.path !== "");
   }
 

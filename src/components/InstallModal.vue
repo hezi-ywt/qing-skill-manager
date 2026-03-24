@@ -139,7 +139,7 @@ function close() {
               {{ t("installModal.installToIde") }}
             </button>
             <button class="primary" :disabled="selectedProjectIds.length === 0 || projects.length === 0" @click="confirmInstallToProject">
-              {{ t("installModal.installToProject") }}
+              {{ t("installModal.cloneToProject") }}
             </button>
             <button class="ghost" @click="close">{{ t("installModal.cancel") }}</button>
           </div>

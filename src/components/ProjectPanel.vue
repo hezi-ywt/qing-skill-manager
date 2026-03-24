@@ -17,7 +17,7 @@ const emit = defineEmits<{
   (e: "removeProject", projectId: string): void;
   (e: "selectProject", projectId: string | null): void;
   (e: "configureProject", projectId: string): void;
-  (e: "linkSkills", projectId: string): void;
+  (e: "cloneSkills", projectId: string): void;
 }>();
 
 function handleAddProject() {
@@ -37,7 +37,7 @@ function handleConfigureProject(projectId: string) {
 }
 
 function handleLinkSkills(projectId: string) {
-  emit("linkSkills", projectId);
+  emit("cloneSkills", projectId);
 }
 </script>
 
@@ -86,7 +86,7 @@ function handleLinkSkills(projectId: string) {
               :disabled="localLoading"
               @click="handleLinkSkills(project.id)"
             >
-              {{ t("projects.linkSkills") }}
+               {{ t("projects.cloneSkills") }}
             </button>
             <button
               class="ghost danger small"

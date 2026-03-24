@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import type { ProjectConfig, LocalSkill, IdeOption } from "../composables/types";
+import { ref } from "vue";
+import type { ProjectConfig, LocalSkill, IdeOption, ProjectSkill } from "../composables/types";
 import { useI18n } from "vue-i18n";
 
 const { t } = useI18n();
@@ -10,8 +11,11 @@ const props = defineProps<{
   selectedProjectId: string | null;
   localSkills: LocalSkill[];
   ideOptions: IdeOption[];
+  projectSkillSnapshots?: Record<string, ProjectSkill[]>;
   localLoading: boolean;
 }>();
+
+const expandedProjectId = ref<string | null>(null);
 
 const emit = defineEmits<{
   (e: "addProject"): void;
@@ -59,6 +63,25 @@ function buildIdeBadgeList(project: ProjectConfig) {
     label: ideLabel,
     active: true
   }));
+}
+
+function getProjectSkillStats(projectId: string) {
+  const skills = props.projectSkillSnapshots?.[projectId] ?? [];
+  const conflicts = skills.filter((skill) => skill.status === "conflict").length;
+  const duplicates = skills.filter((skill) => skill.status === "duplicate").length;
+  const managedVersions = skills.filter((skill) => skill.status === "managed_version").length;
+  const sameNameDefaults = skills.filter((skill) => skill.matchesDefaultVersion === true).length;
+  const versionMatches = skills.filter((skill) => !!skill.matchedVersionId && skill.matchesDefaultVersion !== true).length;
+  return { conflicts, duplicates, managedVersions, sameNameDefaults, versionMatches, total: skills.length };
+}
+
+function toggleProjectDetails(projectId: string) {
+  expandedProjectId.value = expandedProjectId.value === projectId ? null : projectId;
+}
+
+function getProjectSkillDetails(projectId: string) {
+  const skills = props.projectSkillSnapshots?.[projectId] ?? [];
+  return skills.filter((skill) => skill.status === "conflict" || skill.status === "duplicate" || skill.status === "managed_version");
 }
 </script>
 
@@ -109,14 +132,14 @@ function buildIdeBadgeList(project: ProjectConfig) {
               class="primary small"
               @click="handleExportSkills(project.id)"
             >
-              {{ t("projects.exportSkills") }}
+              {{ t("projects.scanProjectSkills") }}
             </button>
             <button
               class="primary small"
               :disabled="localLoading"
               @click="handleImportSkills(project.id)"
             >
-              {{ t("projects.importSkills") }}
+              {{ t("projects.cloneSkillsToProject") }}
             </button>
             <button
               class="ghost danger small"
@@ -133,6 +156,21 @@ function buildIdeBadgeList(project: ProjectConfig) {
           <span v-if="project.detectedIdeDirs.length > 0" class="meta-item">
             {{ t("projects.detected", { count: project.detectedIdeDirs.length }) }}
           </span>
+          <span v-if="getProjectSkillStats(project.id).conflicts > 0" class="meta-item warning">
+            {{ t("projects.conflictSkills") }}: {{ getProjectSkillStats(project.id).conflicts }}
+          </span>
+          <span v-if="getProjectSkillStats(project.id).duplicates > 0" class="meta-item info">
+            {{ t("projects.modifiedOrSameNameSkills") }}: {{ getProjectSkillStats(project.id).duplicates }}
+          </span>
+          <span v-if="getProjectSkillStats(project.id).managedVersions > 0" class="meta-item success">
+            {{ t("projects.importedManagedVersions") }}: {{ getProjectSkillStats(project.id).managedVersions }}
+          </span>
+          <span v-if="getProjectSkillStats(project.id).sameNameDefaults > 0" class="meta-item success">
+            {{ t("projects.defaultMatchedSkills") }}: {{ getProjectSkillStats(project.id).sameNameDefaults }}
+          </span>
+          <span v-if="getProjectSkillStats(project.id).versionMatches > 0" class="meta-item info">
+            {{ t("projects.otherMatchedVersions") }}: {{ getProjectSkillStats(project.id).versionMatches }}
+          </span>
         </div>
         <div class="ide-badges">
           <span
@@ -143,6 +181,45 @@ function buildIdeBadgeList(project: ProjectConfig) {
           >
             {{ badge.label }}
           </span>
+        </div>
+        <div v-if="getProjectSkillStats(project.id).total > 0" class="project-detail-toggle-row">
+          <button class="ghost small" @click="toggleProjectDetails(project.id)">
+            {{ expandedProjectId === project.id ? t("projects.hideSkillDetails") : t("projects.showSkillDetails") }}
+          </button>
+        </div>
+        <div v-if="expandedProjectId === project.id" class="project-skill-details">
+          <div v-if="getProjectSkillDetails(project.id).length === 0" class="detail-empty">
+            {{ t("projects.noMonitoredSkillChanges") }}
+          </div>
+          <div v-for="skill in getProjectSkillDetails(project.id)" :key="skill.path" class="detail-item">
+            <div class="detail-main">
+              <div class="detail-name-row">
+                <span class="detail-name">{{ skill.name }}</span>
+                <span class="detail-status" :class="skill.status">{{ skill.status }}</span>
+              </div>
+              <div class="detail-path">{{ skill.path }}</div>
+              <div class="detail-badges">
+                <span v-if="skill.matchesDefaultVersion === true" class="detail-chip success">
+                  {{ t("projects.defaultMatchedSkills") }}
+                </span>
+                <span v-else-if="skill.status === 'managed_version'" class="detail-chip success">
+                  {{ t("projects.importedManagedVersions") }}
+                </span>
+                <span v-else-if="skill.matchedVersionName" class="detail-chip info">
+                  {{ t("projects.matchesManagedVersion", { name: skill.matchedVersionName }) }}
+                </span>
+                <span v-if="skill.status === 'conflict'" class="detail-chip warning">
+                  {{ t("projects.conflictSkills") }}
+                </span>
+                <span v-if="skill.status === 'duplicate'" class="detail-chip info">
+                  {{ t("projects.modifiedOrSameNameSkills") }}
+                </span>
+                <span v-if="skill.matchedRegistrySkill?.path" class="detail-chip info">
+                  {{ t("projects.matchesManagedVersion", { name: skill.matchedRegistrySkill.name }) }}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -237,6 +314,21 @@ function buildIdeBadgeList(project: ProjectConfig) {
   font-size: 11px;
 }
 
+.meta-item.warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.meta-item.info {
+  background: color-mix(in srgb, var(--color-primary-bg) 12%, transparent);
+  color: var(--color-primary-bg);
+}
+
+.meta-item.success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
 .ide-badges {
   display: flex;
   flex-wrap: wrap;
@@ -259,5 +351,104 @@ function buildIdeBadgeList(project: ProjectConfig) {
   background: var(--color-success-bg);
   color: var(--color-success-text);
   font-weight: 600;
+}
+
+.project-detail-toggle-row {
+  margin-top: 10px;
+}
+
+.project-skill-details {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--color-card-border);
+  background: color-mix(in srgb, var(--color-card-bg) 92%, var(--color-bg) 8%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.detail-empty {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.detail-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+}
+
+.detail-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.detail-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.detail-status {
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--color-chip-bg);
+  color: var(--color-muted);
+}
+
+.detail-status.conflict {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.detail-status.duplicate {
+  background: color-mix(in srgb, var(--color-primary-bg) 12%, transparent);
+  color: var(--color-primary-bg);
+}
+
+.detail-status.managed_version {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.detail-path {
+  font-size: 12px;
+  color: var(--color-muted);
+  word-break: break-all;
+}
+
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.detail-chip {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.detail-chip.success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.detail-chip.warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.detail-chip.info {
+  background: color-mix(in srgb, var(--color-primary-bg) 12%, transparent);
+  color: var(--color-primary-bg);
 }
 </style>
