@@ -1,62 +1,24 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { invoke } from "@tauri-apps/api/core";
 import { i18n, supportedLocales, type SupportedLocale } from "../i18n";
-import { useUpdateStore } from "../composables/useUpdateStore";
 import { useToast } from "../composables/useToast";
 
 const { t } = useI18n();
 const toast = useToast();
 
-// Theme state
 type ThemeMode = "light" | "dark" | "system";
+type DefaultVersionStrategy = "manual" | "latest" | "stable";
 const themeKey = "skillsManager.theme";
 const localeKey = "skillsManager.locale";
 const theme = ref<ThemeMode>("system");
 const locale = ref<SupportedLocale>("zh-CN");
+const defaultVersionStrategy = ref<DefaultVersionStrategy>("manual");
+const defaultVersionStrategyLoaded = ref(false);
+const savingDefaultVersionStrategy = ref(false);
+const defaultVersionStrategyStatus = ref<"idle" | "saved" | "error">("idle");
 
-// Use shared update store
-const {
-  appName,
-  currentVersion,
-  checking,
-  updateAvailable,
-  latestVersion,
-  downloading,
-  downloadProgress,
-  downloaded,
-  upToDate,
-  error,
-  loadAppInfo,
-  checkUpdate,
-  downloadUpdate,
-  installAndRestart,
-  resetState,
-} = useUpdateStore();
-
-const handleCheckUpdate = async () => {
-  await checkUpdate();
-  if (error.value) {
-    toast.error(error.value);
-  } else if (upToDate.value) {
-    toast.info(t("settings.update.upToDate"));
-  }
-};
-
-const handleDownloadUpdate = async () => {
-  await downloadUpdate();
-  if (error.value) {
-    toast.error(error.value);
-  }
-};
-
-const handleInstallAndRestart = async () => {
-  await installAndRestart();
-  if (error.value) {
-    toast.error(error.value);
-  }
-};
 
 // Apply theme to document
 const applyTheme = (mode: ThemeMode) => {
@@ -87,38 +49,47 @@ const loadLocale = (): SupportedLocale => {
   return browser as SupportedLocale;
 };
 
-// Open GitHub
-function openGitHub() {
-  openUrl("https://github.com/Rito-w/skills-manager");
+async function loadDefaultVersionStrategy(): Promise<DefaultVersionStrategy> {
+  const response = await invoke("get_app_config") as { config: { defaultVersionStrategy: DefaultVersionStrategy } };
+  return response.config.defaultVersionStrategy;
 }
 
-// Watch for theme changes
 watch(theme, (next) => {
   applyTheme(next);
   localStorage.setItem(themeKey, next);
 });
 
-// Watch for locale changes
 watch(locale, (next) => {
   i18n.global.locale.value = next;
   localStorage.setItem(localeKey, next);
 });
 
-// Listen for system theme changes
-onMounted(async () => {
-  // Load app info (may already be loaded by startup check)
-  await loadAppInfo();
+watch(defaultVersionStrategy, async (next, previous) => {
+  if (!defaultVersionStrategyLoaded.value || next === previous) return;
+  savingDefaultVersionStrategy.value = true;
+  defaultVersionStrategyStatus.value = "idle";
+  try {
+    await invoke("save_app_config", {
+      request: { defaultVersionStrategy: next }
+    });
+    defaultVersionStrategyStatus.value = "saved";
+    toast.success(t("settings.versionDefaults.saved"));
+  } catch (error) {
+    defaultVersionStrategyStatus.value = "error";
+    toast.error(String(error));
+  } finally {
+    savingDefaultVersionStrategy.value = false;
+  }
+});
 
-  // Load preferences
+onMounted(async () => {
   theme.value = loadTheme();
   locale.value = loadLocale();
+  defaultVersionStrategy.value = await loadDefaultVersionStrategy();
+  defaultVersionStrategyLoaded.value = true;
   i18n.global.locale.value = locale.value;
   applyTheme(theme.value);
 
-  // Reset upToDate state when entering settings (so we can check again)
-  resetState();
-
-  // Listen for system theme changes
   window
     .matchMedia("(prefers-color-scheme: dark)")
     .addEventListener("change", () => {
@@ -136,62 +107,11 @@ onMounted(async () => {
       <h2 class="section-title">{{ t("settings.about.title") }}</h2>
       <div class="about-content">
         <div class="app-info">
-          <span class="app-name">{{ appName }}</span>
-          <span class="version-badge">v{{ currentVersion }}</span>
+          <span class="app-name">Skills Manager</span>
+          <span class="version-badge">v0.3.21</span>
         </div>
 
-        <!-- Update status -->
-        <div v-if="updateAvailable && !downloaded" class="update-available">
-          <span class="update-message">
-            {{ t("settings.update.newVersionAvailable", { version: latestVersion }) }}
-          </span>
-          <button
-            v-if="!downloading"
-            class="primary"
-            @click="handleDownloadUpdate"
-          >
-            {{ t("settings.update.downloadAndInstall") }}
-          </button>
-        </div>
-
-        <!-- Downloading progress -->
-        <div v-if="downloading" class="downloading">
-          <span class="download-status">{{ t("settings.update.downloading") }}</span>
-          <div class="progress">
-            <div class="progress-bar" :style="{ width: downloadProgress + '%' }"></div>
-          </div>
-          <span class="progress-text">{{ downloadProgress }}%</span>
-        </div>
-
-        <!-- Download complete -->
-        <div v-if="downloaded" class="download-complete">
-          <span class="complete-message">{{ t("settings.update.installAndRestart") }}</span>
-          <button class="primary" @click="handleInstallAndRestart">
-            {{ t("settings.update.installAndRestart") }}
-          </button>
-        </div>
-
-        <!-- Up to date message -->
-        <div v-if="upToDate" class="up-to-date">
-          <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
-          <span>{{ t("settings.update.upToDate") }}</span>
-        </div>
-
-        <div class="about-actions">
-          <button class="ghost" @click="handleCheckUpdate" :disabled="checking || downloading">
-            {{ checking ? t("settings.update.checking") || "..." : t("settings.about.checkUpdate") }}
-          </button>
-          <button class="ghost" @click="openGitHub">
-            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
-              />
-            </svg>
-            {{ t("settings.about.github") }}
-          </button>
-        </div>
+        <div class="about-actions"></div>
       </div>
     </section>
 
@@ -260,6 +180,42 @@ onMounted(async () => {
               English
             </button>
           </div>
+        </div>
+
+        <div class="setting-row">
+          <label class="setting-label">{{ t("settings.versionDefaults.title") }}</label>
+          <div class="strategy-options">
+            <button
+              class="theme-btn"
+              :class="{ active: defaultVersionStrategy === 'manual' }"
+              :disabled="savingDefaultVersionStrategy"
+              @click="defaultVersionStrategy = 'manual'"
+            >
+              <span>{{ t("settings.versionDefaults.manual") }}</span>
+            </button>
+            <button
+              class="theme-btn"
+              :class="{ active: defaultVersionStrategy === 'latest' }"
+              :disabled="savingDefaultVersionStrategy"
+              @click="defaultVersionStrategy = 'latest'"
+            >
+              <span>{{ t("settings.versionDefaults.latest") }}</span>
+            </button>
+            <button
+              class="theme-btn"
+              :class="{ active: defaultVersionStrategy === 'stable' }"
+              :disabled="savingDefaultVersionStrategy"
+              @click="defaultVersionStrategy = 'stable'"
+            >
+              <span>{{ t("settings.versionDefaults.stable") }}</span>
+            </button>
+          </div>
+          <p class="setting-note">{{ t("settings.versionDefaults.description") }}</p>
+          <p class="setting-note status-line">
+            <span v-if="savingDefaultVersionStrategy">{{ t("settings.versionDefaults.saving") }}</span>
+            <span v-else-if="defaultVersionStrategyStatus === 'saved'">{{ t("settings.versionDefaults.saved") }}</span>
+            <span v-else-if="defaultVersionStrategyStatus === 'error'">{{ t("settings.versionDefaults.saveFailed") }}</span>
+          </p>
         </div>
       </div>
     </section>
@@ -331,98 +287,6 @@ onMounted(async () => {
   gap: 6px;
 }
 
-.btn-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.update-available {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 16px;
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success-border);
-  border-radius: 10px;
-}
-
-.update-message {
-  font-size: 14px;
-  color: var(--color-success-text);
-  font-weight: 500;
-}
-
-.downloading {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  background: var(--color-card-bg);
-  border: 1px solid var(--color-card-border);
-  border-radius: 10px;
-}
-
-.download-status {
-  font-size: 14px;
-  color: var(--color-muted);
-}
-
-.progress {
-  width: 100%;
-  height: 8px;
-  background: var(--color-progress-bg);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.progress-bar {
-  height: 100%;
-  background: var(--color-primary-bg);
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  font-size: 12px;
-  color: var(--color-muted);
-  text-align: right;
-}
-
-.download-complete {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 16px;
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success-border);
-  border-radius: 10px;
-}
-
-.complete-message {
-  font-size: 14px;
-  color: var(--color-success-text);
-  font-weight: 500;
-}
-
-.up-to-date {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  background: var(--color-card-bg);
-  border: 1px solid var(--color-card-border);
-  border-radius: 10px;
-  color: var(--color-success-text);
-  font-size: 14px;
-}
-
-.check-icon {
-  width: 18px;
-  height: 18px;
-  color: var(--color-success-text);
-}
-
 /* Appearance Section */
 .appearance-content {
   display: flex;
@@ -479,6 +343,22 @@ onMounted(async () => {
 .language-options {
   display: flex;
   gap: 10px;
+}
+
+.strategy-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.setting-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.status-line {
+  min-height: 18px;
 }
 
 .lang-btn {
@@ -559,11 +439,5 @@ onMounted(async () => {
     gap: 12px;
   }
 
-  .update-available,
-  .download-complete {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
 }
 </style>

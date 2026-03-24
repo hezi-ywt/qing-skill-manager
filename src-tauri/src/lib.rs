@@ -5,24 +5,25 @@ mod utils;
 use tauri::Manager;
 use commands::market::{download_marketplace_skill, search_marketplaces, update_marketplace_skill};
 use commands::skills::{
-    adopt_ide_skill, analyze_skill_conflict, create_skill_variant, create_skill_version, delete_local_skills,
+    adopt_ide_skill, analyze_skill_conflict, clone_local_skill, create_skill_variant, create_skill_version, delete_local_skills,
     delete_skill_variant, delete_skill_version, get_skill_package, import_local_skill,
-    link_local_skill, list_skill_packages, rename_skill_version, resolve_skill_conflict,
+    list_skill_packages, rename_skill_version, resolve_skill_conflict,
     scan_overview, scan_project_ide_dirs, scan_project_opencode_skills, compare_skill_versions,
-    set_default_skill_version, uninstall_skill, update_skill_variant,
+    set_default_skill_version, uninstall_skill, update_skill_variant, get_app_config, save_app_config,
 };
 
 pub use crate::types::{
     AdoptIdeSkillRequest, AnalyzeConflictRequest, ConflictAnalysis, ConflictResolution,
+    AppConfig, AppConfigResponse,
     CreateVariantRequest, CreateVariantResponse, CreateVersionRequest, CreateVersionResponse, DeleteLocalSkillRequest, DeleteVariantRequest,
     DeleteVersionRequest, DeleteVersionResponse, GetSkillPackageRequest, GetSkillPackageResponse,
-    IdeDir, IdeSkill, ImportProjectSkillRequest, ImportRequest, InstallResult, LinkRequest,
+    IdeDir, IdeSkill, ImportProjectSkillRequest, ImportRequest, InstallRequest, InstallResult,
     LinkTarget, ListSkillPackagesResponse, LocalScanRequest, LocalSkill, MarketStatus,
     MarketStatusType, Overview, ProjectIdeDir, ProjectScanRequest, ProjectScanResult,
     ProjectSkill, ProjectSkillImportStatus, ProjectSkillScanResult, RemoteSkill,
     RemoteSkillView, RemoteSkillsResponse, RemoteSkillsViewResponse, RenameVersionRequest,
     RenameVersionResponse, ResolveConflictRequest, ResolveConflictResult,
-    ScanProjectSkillsRequest, SetDefaultVersionRequest, SkillDiff, SkillPackage,
+    SaveAppConfigRequest, ScanProjectSkillsRequest, SetDefaultVersionRequest, SkillDiff, SkillPackage,
     SkillPackageSummary, SkillVariant, SkillVersion, UninstallRequest, UpdateVariantRequest,
 };
 
@@ -30,14 +31,13 @@ pub use crate::types::{
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             search_marketplaces,
             download_marketplace_skill,
             update_marketplace_skill,
-            link_local_skill,
+            clone_local_skill,
             scan_overview,
             uninstall_skill,
             import_local_skill,
@@ -51,6 +51,8 @@ pub fn run() {
             compare_skill_versions,
             list_skill_packages,
             get_skill_package,
+            get_app_config,
+            save_app_config,
             rename_skill_version,
             delete_skill_version,
             set_default_skill_version,

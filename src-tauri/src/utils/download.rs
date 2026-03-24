@@ -171,7 +171,7 @@ pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         let file_type = entry.file_type();
         if file_type.is_symlink() {
             return Err(format!(
-                "检测到符号链接，已拒绝复制: {}",
+                "检测到链接型目录项，已拒绝复制: {}",
                 entry.path().display()
             ));
         }
