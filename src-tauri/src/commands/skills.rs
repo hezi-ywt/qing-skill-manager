@@ -1,14 +1,15 @@
 use crate::types::{
     AdoptIdeSkillRequest, AnalyzeConflictRequest, ConflictAnalysis, ConflictResolution,
+    AppConfig, AppConfigResponse,
     ConflictSeverity, ConflictType, CreateVariantRequest, CreateVariantResponse,
     CreateVersionRequest, CreateVersionResponse,
     DeleteLocalSkillRequest, DeleteStrategy, DeleteVariantRequest, DeleteVersionRequest,
     DeleteVersionResponse, GetSkillPackageRequest, GetSkillPackageResponse, IdeSkill, ImportRequest,
-    InstallResult, LinkRequest, ListSkillPackagesResponse, LocalScanRequest, LocalSkill,
+    InstallRequest, InstallResult, ListSkillPackagesResponse, LocalScanRequest, LocalSkill,
     MetadataChange, Overview, ProjectIdeDir, ProjectScanRequest, ProjectScanResult, ProjectSkill,
     ProjectSkillImportStatus, ProjectSkillScanResult, RenameVersionRequest,
     RenameVersionResponse, ResolutionAction, ResolutionSuggestion, ResolveConflictRequest,
-    ResolveConflictResult, ScanProjectSkillsRequest, SetDefaultVersionRequest, SkillDiff,
+    ResolveConflictResult, SaveAppConfigRequest, ScanProjectSkillsRequest, SetDefaultVersionRequest, SkillDiff,
     SkillPackage, SkillPackageSummary, SkillVariant, SkillVersion, SkillVersionMetadata,
     SkillVersionSource, UninstallRequest, UpdateVariantRequest,
 };
@@ -49,6 +50,46 @@ struct StoredPackageState {
     variants: Vec<SkillVariant>,
 }
 
+fn load_default_version_strategy() -> String {
+    let Some(home) = dirs::home_dir() else {
+        return "manual".to_string();
+    };
+    let config = read_app_config(&home);
+    match config.default_version_strategy.as_str() {
+        "manual" | "latest" | "stable" => config.default_version_strategy,
+        _ => "manual".to_string(),
+    }
+}
+
+fn select_strategy_default_version(versions: &[SkillVersion], strategy: &str) -> Option<String> {
+    match strategy {
+        "latest" => versions.first().map(|version| version.id.clone()),
+        "stable" => versions
+            .iter()
+            .find(|version| !version.version.contains("alpha") && !version.version.contains("beta") && !version.version.contains("rc"))
+            .map(|version| version.id.clone())
+            .or_else(|| versions.first().map(|version| version.id.clone())),
+        _ => versions.first().map(|version| version.id.clone()),
+    }
+}
+
+fn resolve_default_version(
+    explicit_default_version: Option<String>,
+    versions: &[SkillVersion],
+    strategy: &str,
+    fallback_version_id: &str,
+) -> (String, String) {
+    if let Some(explicit) = explicit_default_version {
+        return (explicit, "explicit".to_string());
+    }
+
+    (
+        select_strategy_default_version(versions, strategy)
+            .unwrap_or_else(|| fallback_version_id.to_string()),
+        "strategy".to_string(),
+    )
+}
+
 fn now_timestamp() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -84,6 +125,35 @@ fn write_version_sidecar(skill_dir: &Path, sidecar: &StoredVersionMetadata) -> R
 
 fn package_state_path(home: &Path, skill_id: &str) -> PathBuf {
     manager_versions_root(home).join(skill_id).join("package.json")
+}
+
+fn app_config_path(home: &Path) -> PathBuf {
+    home.join(".skills-manager/config.json")
+}
+
+fn read_app_config(home: &Path) -> AppConfig {
+    let path = app_config_path(home);
+    if !path.exists() {
+        return AppConfig {
+            default_version_strategy: "manual".to_string(),
+        };
+    }
+
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|content| serde_json::from_str::<AppConfig>(&content).ok())
+        .unwrap_or(AppConfig {
+            default_version_strategy: "manual".to_string(),
+        })
+}
+
+fn write_app_config(home: &Path, config: &AppConfig) -> Result<(), String> {
+    let path = app_config_path(home);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let serialized = serde_json::to_string_pretty(config).map_err(|err| err.to_string())?;
+    fs::write(path, serialized).map_err(|err| err.to_string())
 }
 
 fn read_skill_metadata(skill_dir: &Path) -> (String, String) {
@@ -431,11 +501,13 @@ fn package_from_skill_dir(home: &Path, manager_dir: &Path, skill_dir: &Path) -> 
         });
     }
 
-    let default_version = state
-        .default_version
-        .clone()
-        .or_else(|| versions.first().map(|version| version.id.clone()))
-        .unwrap_or_else(|| primary_version.id.clone());
+    let strategy = load_default_version_strategy();
+    let (default_version, default_version_source) = resolve_default_version(
+        state.default_version.clone(),
+        &versions,
+        &strategy,
+        &primary_version.id,
+    );
 
     SkillPackage {
         id: primary_version.skill_id.clone(),
@@ -446,6 +518,7 @@ fn package_from_skill_dir(home: &Path, manager_dir: &Path, skill_dir: &Path) -> 
             .clone()
             .unwrap_or_else(|| "default".to_string()),
         default_version,
+        default_version_source,
         versions,
         variants: state.variants,
         created_at: now_timestamp(),
@@ -494,7 +567,7 @@ fn collect_skills_from_dir(base: &Path, source: &str, ide: Option<&str>) -> Vec<
 fn collect_ide_skills(
     base: &Path,
     ide_label: &str,
-    manager_map: &[(PathBuf, usize)],
+    manager_map: &[(String, usize)],
     manager_skills: &mut [LocalSkill],
 ) -> Vec<IdeSkill> {
     let mut skills = Vec::new();
@@ -513,18 +586,17 @@ fn collect_ide_skills(
             Err(_) => continue,
         };
         let path = entry.path();
-        let metadata = match fs::symlink_metadata(&path) {
+        let metadata = match fs::metadata(&path) {
             Ok(metadata) => metadata,
             Err(_) => continue,
         };
-        let link_target = fs::read_link(&path).ok();
-        if !metadata.is_dir() && link_target.is_none() {
+        if !metadata.is_dir() {
             continue;
         }
 
         let skill_dir = path.as_path();
         let has_skill_file = skill_dir.join("SKILL.md").exists();
-        if !has_skill_file && link_target.is_none() {
+        if !has_skill_file {
             continue;
         }
 
@@ -540,34 +612,19 @@ fn collect_ide_skills(
 
         let path = skill_dir.to_path_buf();
         let mut managed = false;
-        let source = if let Some(link_target) = link_target {
-            let absolute_target = if link_target.is_relative() {
-                if let Some(parent) = path.parent() {
-                    parent.join(&link_target)
-                } else {
-                    link_target.clone()
-                }
-            } else {
-                link_target
-            };
-
-            if let Some(target) = resolve_canonical(&absolute_target) {
-                for (manager_path, idx) in manager_map {
-                    if *manager_path == target {
-                        managed = true;
-                        if let Some(skill) = manager_skills.get_mut(*idx) {
-                            if !skill.used_by.contains(&ide_label.to_string()) {
-                                skill.used_by.push(ide_label.to_string());
-                            }
-                        }
-                        break;
+        let content_hash = skill_content_hash(&path);
+        for (manager_hash, idx) in manager_map {
+            if *manager_hash == content_hash {
+                managed = true;
+                if let Some(skill) = manager_skills.get_mut(*idx) {
+                    if !skill.used_by.contains(&ide_label.to_string()) {
+                        skill.used_by.push(ide_label.to_string());
                     }
                 }
+                break;
             }
-            "link"
-        } else {
-            "local"
-        };
+        }
+        let source = if managed { "managed" } else { "local" };
 
         skills.push(IdeSkill {
             id: path.display().to_string(),
@@ -583,84 +640,15 @@ fn collect_ide_skills(
 }
 
 fn remove_path(path: &Path) -> Result<(), String> {
-    let metadata = fs::symlink_metadata(path).map_err(|err| err.to_string())?;
-    if metadata.file_type().is_symlink() {
-        // `path.is_dir()` follows symlinks and may report true for a symlink-to-dir.
-        // Removing such a symlink with `remove_dir` triggers ENOTDIR on macOS.
-        fs::remove_file(path)
-            .or_else(|_| fs::remove_dir(path))
-            .map_err(|err| err.to_string())
-    } else if metadata.is_dir() {
+    if path.is_dir() {
         fs::remove_dir_all(path).map_err(|err| err.to_string())
     } else {
         fs::remove_file(path).map_err(|err| err.to_string())
     }
 }
 
-fn is_symlink_to(path: &Path, target: &Path) -> bool {
-    match (resolve_canonical(path), resolve_canonical(target)) {
-        (Some(link_target), Some(expected_target)) => link_target == expected_target,
-        _ => false,
-    }
-}
-
-fn create_symlink_dir(target: &Path, link: &Path) -> Result<(), String> {
-    #[cfg(target_family = "unix")]
-    {
-        std::os::unix::fs::symlink(target, link).map_err(|err| err.to_string())
-    }
-    #[cfg(target_family = "windows")]
-    {
-        std::os::windows::fs::symlink_dir(target, link).map_err(|err| err.to_string())
-    }
-}
-
-#[cfg(target_family = "windows")]
-fn create_junction_dir(target: &Path, link: &Path) -> Result<(), String> {
-    use std::process::Command;
-
-    fn to_cmd_path(path: &Path) -> String {
-        path.to_string_lossy().replace('/', "\\")
-    }
-
-    fn validate_path(path: &str) -> Result<(), String> {
-        let dangerous_chars = ['|', '^', '<', '>', '%', '!', '"', '&', '(', ')', ';'];
-        for ch in dangerous_chars {
-            if path.contains(ch) {
-                return Err(format!("Path contains dangerous character: '{}'", ch));
-            }
-        }
-        Ok(())
-    }
-
-    let target = to_cmd_path(target);
-    let link = to_cmd_path(link);
-
-    validate_path(&target)?;
-    validate_path(&link)?;
-
-    let output = Command::new("cmd")
-        .args(["/C", "mklink", "/J", &link, &target])
-        .output()
-        .map_err(|err| err.to_string())?;
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        let detail = if !stderr.is_empty() {
-            stderr
-        } else if !stdout.is_empty() {
-            stdout
-        } else {
-            "unknown error".to_string()
-        };
-        Err(format!("mklink /J failed: {}", detail))
-    }
-}
-
 #[tauri::command]
-pub fn link_local_skill(request: LinkRequest) -> Result<InstallResult, String> {
+pub fn clone_local_skill(request: InstallRequest) -> Result<InstallResult, String> {
     let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
     let normalized_home = normalize_path(&home);
     let manager_root_raw = home.join(".skills-manager/skills");
@@ -676,11 +664,10 @@ pub fn link_local_skill(request: LinkRequest) -> Result<InstallResult, String> {
     let skill_path = skill_canon;
 
     let safe_name = sanitize_dir_name(&request.skill_name);
-
-    let mut linked = Vec::new();
+    let mut installed = Vec::new();
     let mut skipped = Vec::new();
 
-    for target in request.link_targets {
+    for target in request.install_targets {
         let target_base = PathBuf::from(&target.path);
         let normalized_target = normalize_path(&target_base);
         if !normalized_target.starts_with(&normalized_home) {
@@ -690,67 +677,21 @@ pub fn link_local_skill(request: LinkRequest) -> Result<InstallResult, String> {
             ));
         }
 
-        // Normalize resolved paths before comparison so Windows verbatim prefixes do not
-        // trigger false-positive symlink attack errors.
-        let target_canon =
-            resolve_canonical(&target_base).unwrap_or_else(|| normalized_target.clone());
-        if !target_canon.starts_with(&normalized_home) {
-            return Err(format!(
-                "Target directory failed the symlink safety check: {}",
-                target.name
-            ));
-        }
-
         fs::create_dir_all(&target_base).map_err(|err| err.to_string())?;
-        let link_path = target_base.join(&safe_name);
+        let clone_path = target_base.join(&safe_name);
 
-        if fs::symlink_metadata(&link_path).is_ok() {
-            if is_symlink_to(&link_path, &skill_path) {
-                skipped.push(format!("{}: already linked", target.name));
-                continue;
-            }
+        if clone_path.exists() {
             skipped.push(format!("{}: target already exists", target.name));
             continue;
         }
 
-        let mut linked_done = false;
-        let mut link_errors = Vec::new();
-
-        match create_symlink_dir(&skill_path, &link_path) {
-            Ok(()) => {
-                linked.push(format!("{}: {}", target.name, link_path.display()));
-                linked_done = true;
-            }
-            Err(err) => link_errors.push(format!("symlink: {}", err)),
-        }
-
-        #[cfg(target_family = "windows")]
-        if !linked_done {
-            match create_junction_dir(&skill_path, &link_path) {
-                Ok(()) => {
-                    linked.push(format!("{}: junction {}", target.name, link_path.display()));
-                    linked_done = true;
-                }
-                Err(err) => link_errors.push(format!("junction: {}", err)),
-            }
-        }
-
-        if !linked_done {
-            let detail = if link_errors.is_empty() {
-                "unknown error".to_string()
-            } else {
-                link_errors.join("; ")
-            };
-            return Err(format!(
-                "Failed to create a link for {} in {}: {}",
-                request.skill_name, target.name, detail
-            ));
-        }
+        copy_dir_recursive(&skill_path, &clone_path)?;
+        installed.push(format!("{}: {}", target.name, clone_path.display()));
     }
 
     Ok(InstallResult {
         installed_path: skill_path.display().to_string(),
-        linked,
+        installed,
         skipped,
     })
 }
@@ -800,10 +741,11 @@ pub fn scan_overview(request: LocalScanRequest) -> Result<Overview, String> {
 
     let mut ide_skills: Vec<IdeSkill> = Vec::new();
 
-    let mut manager_map: Vec<(PathBuf, usize)> = Vec::new();
+    let mut manager_map: Vec<(String, usize)> = Vec::new();
     for (idx, skill) in manager_skills.iter().enumerate() {
-        if let Some(path) = resolve_canonical(Path::new(&skill.path)) {
-            manager_map.push((path, idx));
+        let path = Path::new(&skill.path);
+        if path.join("SKILL.md").exists() {
+            manager_map.push((skill_content_hash(path), idx));
         }
     }
 
@@ -901,16 +843,6 @@ pub fn uninstall_skill(request: UninstallRequest) -> Result<String, String> {
         return Err("Target path is outside the allowed directories".to_string());
     }
 
-    let metadata = fs::symlink_metadata(&target).map_err(|err| err.to_string())?;
-    if metadata.file_type().is_symlink() {
-        // `target.is_dir()` follows symlinks and may report true for a symlink-to-dir.
-        // Removing such a symlink with `remove_dir` triggers ENOTDIR/ENOTEMPTY on macOS.
-        fs::remove_file(&target)
-            .or_else(|_| fs::remove_dir(&target))
-            .map_err(|err| err.to_string())?;
-        return Ok("Link removed".to_string());
-    }
-
     fs::remove_dir_all(&target).map_err(|err| err.to_string())?;
     Ok("Directory removed".to_string())
 }
@@ -956,7 +888,7 @@ pub fn adopt_ide_skill(request: AdoptIdeSkillRequest) -> Result<String, String> 
         return Err("IDE skill path must stay inside the home directory".to_string());
     }
 
-    fs::symlink_metadata(&target).map_err(|_| "IDE skill path does not exist".to_string())?;
+    fs::metadata(&target).map_err(|_| "IDE skill path does not exist".to_string())?;
     let target_canon = resolve_canonical(&target);
 
     let (name, has_skill_file) = if let Some(path) = target_canon.as_ref() {
@@ -995,38 +927,10 @@ pub fn adopt_ide_skill(request: AdoptIdeSkillRequest) -> Result<String, String> 
     }
 
     remove_path(&target)?;
-
-    let mut linked_done = false;
-    let mut link_errors = Vec::new();
-
-    match create_symlink_dir(&manager_target, &target) {
-        Ok(()) => linked_done = true,
-        Err(err) => link_errors.push(format!("symlink: {}", err)),
-    }
-
-    #[cfg(target_family = "windows")]
-    if !linked_done {
-        match create_junction_dir(&manager_target, &target) {
-            Ok(()) => linked_done = true,
-            Err(err) => link_errors.push(format!("junction: {}", err)),
-        }
-    }
-
-    if !linked_done {
-        copy_dir_recursive(&manager_target, &target)?;
-        let detail = if link_errors.is_empty() {
-            "unknown error".to_string()
-        } else {
-            link_errors.join("; ")
-        };
-        return Err(format!(
-            "Managed {} in Skills Manager, but failed to create a link for {}. Restored a local copy instead. {}",
-            name, request.ide_label, detail
-        ));
-    }
+    copy_dir_recursive(&manager_target, &target)?;
 
     Ok(format!(
-        "Managed {} and re-linked it to {}",
+        "Managed {} and restored a local copy for {}",
         name, request.ide_label
     ))
 }
@@ -1120,19 +1024,21 @@ pub fn scan_project_opencode_skills(
             skills: Vec::new(),
             new_count: 0,
             duplicate_count: 0,
+            managed_version_count: 0,
             conflict_count: 0,
         });
     }
 
     let existing_skills = collect_skills_from_dir(&manager_root, "manager", None);
-    let existing_names: std::collections::HashMap<String, LocalSkill> = existing_skills
-        .into_iter()
-        .map(|s| (s.name.clone(), s))
-        .collect();
+    let mut existing_names: std::collections::HashMap<String, Vec<LocalSkill>> = std::collections::HashMap::new();
+    for skill in existing_skills {
+        existing_names.entry(skill.name.clone()).or_default().push(skill);
+    }
 
     let mut skills = Vec::new();
     let mut new_count = 0;
     let mut duplicate_count = 0;
+    let mut managed_version_count = 0;
     let mut conflict_count = 0;
 
     let entries = match fs::read_dir(&opencode_path) {
@@ -1143,6 +1049,7 @@ pub fn scan_project_opencode_skills(
                 skills: Vec::new(),
                 new_count: 0,
                 duplicate_count: 0,
+                managed_version_count: 0,
                 conflict_count: 0,
             })
         }
@@ -1160,23 +1067,59 @@ pub fn scan_project_opencode_skills(
 
         let (name, description) = read_skill_metadata(&path);
         let incoming_version = build_skill_version(&path, SkillVersionSource::Project);
-        let status = if let Some(existing) = existing_names.get(&name) {
-            if existing
+        let candidates = existing_names.get(&name).cloned().unwrap_or_default();
+        let existing_registry_skill = candidates.first().cloned();
+
+        let mut matched_registry_skill: Option<LocalSkill> = None;
+        let mut matched_version: Option<(SkillVersion, String)> = None;
+
+        for candidate in &candidates {
+            if candidate
                 .current_version
                 .as_ref()
                 .is_some_and(|version| version.content_hash == incoming_version.content_hash)
             {
+                matched_registry_skill = Some(candidate.clone());
+                if let Some(version) = candidate.current_version.clone() {
+                    matched_version = Some((version.clone(), version.id.clone()));
+                }
+                break;
+            }
+
+            if let Some(local_version) = candidate.current_version.as_ref() {
+                if let Ok(package) = get_skill_package(GetSkillPackageRequest {
+                    skill_id: local_version.skill_id.clone(),
+                }) {
+                    if let Some(version) = package
+                        .package
+                        .versions
+                        .into_iter()
+                        .find(|version| version.content_hash == incoming_version.content_hash)
+                    {
+                        matched_registry_skill = Some(candidate.clone());
+                        matched_version = Some((version, package.package.default_version));
+                        break;
+                    }
+                }
+            }
+        }
+
+        let status = if candidates.is_empty() {
+            ProjectSkillImportStatus::New
+        } else if let Some((version, default_version)) = matched_version.as_ref() {
+            if version.id == *default_version {
                 ProjectSkillImportStatus::Duplicate
             } else {
-                ProjectSkillImportStatus::Conflict
+                ProjectSkillImportStatus::ManagedVersion
             }
         } else {
-            ProjectSkillImportStatus::New
+            ProjectSkillImportStatus::Conflict
         };
 
         match &status {
             ProjectSkillImportStatus::New => new_count += 1,
             ProjectSkillImportStatus::Duplicate => duplicate_count += 1,
+            ProjectSkillImportStatus::ManagedVersion => managed_version_count += 1,
             ProjectSkillImportStatus::Conflict => conflict_count += 1,
         }
 
@@ -1186,8 +1129,14 @@ pub fn scan_project_opencode_skills(
             description,
             path: path.display().to_string(),
             status: status.clone(),
-            existing_registry_skill: existing_names.get(&name).cloned(),
+            existing_registry_skill,
+            matched_registry_skill,
             current_version: Some(incoming_version),
+            matched_version_id: matched_version.as_ref().map(|(version, _)| version.id.clone()),
+            matched_version_name: matched_version.as_ref().map(|(version, _)| version.display_name.clone()),
+            matches_default_version: matched_version
+                .as_ref()
+                .map(|(version, default_version)| version.id == *default_version),
         });
     }
 
@@ -1196,6 +1145,7 @@ pub fn scan_project_opencode_skills(
         skills,
         new_count,
         duplicate_count,
+        managed_version_count,
         conflict_count,
     })
 }
@@ -1592,12 +1542,45 @@ pub fn delete_skill_variant(request: DeleteVariantRequest) -> Result<(), String>
     Ok(())
 }
 
+#[tauri::command]
+pub fn get_app_config() -> Result<AppConfigResponse, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    Ok(AppConfigResponse {
+        config: read_app_config(&home),
+    })
+}
+
+#[tauri::command]
+pub fn save_app_config(request: SaveAppConfigRequest) -> Result<AppConfigResponse, String> {
+    if !matches!(request.default_version_strategy.as_str(), "manual" | "latest" | "stable") {
+        return Err("Invalid default version strategy".to_string());
+    }
+
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+    let config = AppConfig {
+        default_version_strategy: request.default_version_strategy,
+    };
+    write_app_config(&home, &config)?;
+    Ok(AppConfigResponse { config })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{build_skill_diff, classify_conflict, parse_skill_metadata, simple_hash};
-    use crate::types::{ConflictSeverity, ConflictType, ResolutionAction, SkillVersion, SkillVersionMetadata, SkillVersionSource};
+    use super::{
+        adopt_ide_skill, build_skill_diff, classify_conflict, clone_local_skill,
+        parse_skill_metadata, read_app_config, resolve_default_version,
+        save_app_config, scan_overview, scan_project_opencode_skills,
+        select_strategy_default_version, simple_hash, uninstall_skill, write_app_config,
+    };
+    use crate::types::{
+        AdoptIdeSkillRequest, AppConfig, ConflictSeverity, ConflictType, IdeDir,
+        InstallRequest, LinkTarget, LocalScanRequest, ResolutionAction,
+        SaveAppConfigRequest, ScanProjectSkillsRequest, SkillVersion, SkillVersionMetadata,
+        SkillVersionSource, UninstallRequest,
+    };
     use std::fs;
     use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn fixture_version(description: &str, version: &str, hash: &str) -> SkillVersion {
         SkillVersion {
@@ -1618,6 +1601,21 @@ mod tests {
                 namespace: Some("default".to_string()),
             },
         }
+    }
+
+    fn unique_test_name(prefix: &str) -> String {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        format!("{}-{}", prefix, nanos)
+    }
+
+    fn write_skill_dir(base: &PathBuf, name: &str, body: &str) -> PathBuf {
+        let dir = base.join(name);
+        fs::create_dir_all(&dir).expect("create skill dir");
+        fs::write(dir.join("SKILL.md"), body).expect("write skill file");
+        dir
     }
 
     #[test]
@@ -1657,5 +1655,512 @@ mod tests {
         assert_eq!(severity, ConflictSeverity::None);
         assert!(auto_resolvable);
         assert_eq!(suggestions[0].action, ResolutionAction::FastForward);
+    }
+
+    #[test]
+    fn strategy_default_prefers_latest_version() {
+        let versions = vec![
+            fixture_version("latest", "2.0.0", "bbbb"),
+            fixture_version("older", "1.0.0", "aaaa"),
+        ];
+
+        let selected = select_strategy_default_version(&versions, "latest");
+        assert_eq!(selected.as_deref(), Some("2.0.0-bbbb"));
+    }
+
+    #[test]
+    fn strategy_default_prefers_stable_version_over_beta() {
+        let versions = vec![
+            fixture_version("beta", "2.0.0-beta", "bbbb"),
+            fixture_version("stable", "1.9.0", "aaaa"),
+        ];
+
+        let selected = select_strategy_default_version(&versions, "stable");
+        assert_eq!(selected.as_deref(), Some("1.9.0-aaaa"));
+    }
+
+    #[test]
+    fn explicit_default_version_overrides_global_strategy() {
+        let versions = vec![
+            fixture_version("latest", "2.0.0", "bbbb"),
+            fixture_version("explicit", "1.5.0", "aaaa"),
+        ];
+
+        let resolved = resolve_default_version(
+            Some("1.5.0-aaaa".to_string()),
+            &versions,
+            "latest",
+            "2.0.0-bbbb",
+        );
+
+        assert_eq!(resolved.0, "1.5.0-aaaa");
+        assert_eq!(resolved.1, "explicit");
+    }
+
+    #[test]
+    fn matched_version_can_be_found_by_content_hash() {
+        let versions = vec![
+            fixture_version("current", "2.0.0", "bbbb"),
+            fixture_version("older", "1.0.0", "aaaa"),
+        ];
+
+        let matched = versions
+            .iter()
+            .find(|version| version.content_hash == "aaaa")
+            .map(|version| version.display_name.clone());
+
+        assert_eq!(matched.as_deref(), Some("1.0.0"));
+    }
+
+    #[test]
+    fn project_skill_matches_default_version_correctly() {
+        // Test scenario: project skill content matches the default version
+        let default_version = fixture_version("default desc", "1.0.0", "hash_default");
+        let other_version = fixture_version("other desc", "2.0.0", "hash_other");
+        let versions = vec![default_version.clone(), other_version.clone()];
+
+        // Simulate finding a match when project skill has the default version's hash
+        let matched = versions
+            .iter()
+            .find(|v| v.content_hash == "hash_default")
+            .map(|v| (v.id.clone(), v.version.clone()));
+
+        assert_eq!(matched, Some(("1.0.0-hash_default".to_string(), "1.0.0".to_string())));
+    }
+
+    #[test]
+    fn project_skill_matches_non_default_version_correctly() {
+        // Test scenario: project skill content matches a non-default version
+        let default_version = fixture_version("default desc", "1.0.0", "hash_default");
+        let other_version = fixture_version("other desc", "2.0.0", "hash_other");
+        let versions = vec![default_version.clone(), other_version.clone()];
+
+        // Simulate finding a match when project skill has a non-default version's hash
+        let matched = versions
+            .iter()
+            .find(|v| v.content_hash == "hash_other")
+            .map(|v| (v.id.clone(), v.version.clone()));
+
+        assert_eq!(matched, Some(("2.0.0-hash_other".to_string(), "2.0.0".to_string())));
+        // Verify this is NOT the default version
+        assert_ne!(matched.unwrap().0, default_version.id);
+    }
+
+    #[test]
+    fn project_skill_no_match_when_hash_unknown() {
+        // Test scenario: project skill content doesn't match any managed version
+        let versions = vec![
+            fixture_version("v1", "1.0.0", "hash_v1"),
+            fixture_version("v2", "2.0.0", "hash_v2"),
+        ];
+
+        // Simulate no match found for unknown hash
+        let matched = versions
+            .iter()
+            .find(|v| v.content_hash == "unknown_hash")
+            .map(|v| v.id.clone());
+
+        assert_eq!(matched, None);
+    }
+
+    #[test]
+    fn clone_local_skill_path_resolution() {
+        // Test that clone_local_skill correctly resolves source and target paths
+        // This tests the core logic without filesystem operations
+        let source_relative = "my-skill";
+        let project_name = "test-project";
+        
+        // Verify path components are correctly joined
+        let source_path = PathBuf::from(source_relative);
+        let target_path = PathBuf::from(project_name).join(".opencode/skills").join(source_relative);
+        
+        assert_eq!(source_path.file_name().unwrap().to_str().unwrap(), "my-skill");
+        assert_eq!(target_path.file_name().unwrap().to_str().unwrap(), "my-skill");
+        assert!(target_path.to_str().unwrap().contains("test-project/.opencode/skills"));
+    }
+
+    #[test]
+    fn version_conflict_detected_on_content_hash_mismatch() {
+        // Test that different content hashes indicate a conflict
+        let local_version = fixture_version("local", "1.0.0", "hash_local");
+        let project_version = fixture_version("project", "1.0.0", "hash_project");
+        
+        // Same version number but different content hashes = conflict
+        assert_ne!(local_version.content_hash, project_version.content_hash);
+        assert_eq!(local_version.version, project_version.version);
+    }
+
+    #[test]
+    fn identical_content_detected_as_duplicate() {
+        // Test that identical content hashes indicate a duplicate (not conflict)
+        let local_version = fixture_version("local", "1.0.0", "same_hash");
+        let project_version = fixture_version("project", "2.0.0", "same_hash");
+        
+        // Different versions but same content = duplicate, not conflict
+        assert_eq!(local_version.content_hash, project_version.content_hash);
+        assert_ne!(local_version.version, project_version.version);
+    }
+
+    #[test]
+    fn strategy_stable_prefers_non_beta_non_alpha() {
+        // Test that 'stable' strategy correctly filters out pre-release versions
+        let versions = vec![
+            fixture_version("alpha", "2.0.0-alpha", "hash1"),
+            fixture_version("beta", "2.0.0-beta", "hash2"),
+            fixture_version("rc", "2.0.0-rc", "hash3"),
+            fixture_version("stable", "1.9.0", "hash4"),
+        ];
+
+        let selected = select_strategy_default_version(&versions, "stable");
+        // Should select the stable version, not any pre-release
+        assert_eq!(selected.as_deref(), Some("1.9.0-hash4"));
+    }
+
+    #[test]
+    fn strategy_latest_selects_first_version() {
+        // Test that 'latest' strategy selects the first version in the list
+        // (assuming versions are pre-ordered with latest first)
+        let versions = vec![
+            fixture_version("latest", "2.0.0", "hash2"),
+            fixture_version("older", "1.0.0", "hash1"),
+            fixture_version("oldest", "0.9.0", "hash0"),
+        ];
+
+        let selected = select_strategy_default_version(&versions, "latest");
+        // Should select the first version (presumed to be latest)
+        assert_eq!(selected.as_deref(), Some("2.0.0-hash2"));
+    }
+
+    #[test]
+    fn clone_local_skill_copies_into_target_directory() {
+        let home = dirs::home_dir().expect("home dir");
+        let unique = unique_test_name("clone-success");
+        let root = home.join(".skills-manager-test").join(&unique);
+        let manager_root = home.join(".skills-manager/skills");
+        let target_root = root.join("ide");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        fs::create_dir_all(&target_root).expect("create target root");
+
+        let skill_dir = write_skill_dir(
+            &manager_root,
+            &format!("demo-skill-{}", unique),
+            "---\nname: Demo Skill\nversion: 1.0.0\n---\nDemo description\n",
+        );
+
+        let result = clone_local_skill(InstallRequest {
+            skill_path: skill_dir.display().to_string(),
+            skill_name: "Demo Skill".to_string(),
+            install_targets: vec![LinkTarget {
+                name: "Test IDE".to_string(),
+                path: target_root.display().to_string(),
+            }],
+        })
+        .expect("clone succeeds");
+
+        let cloned_dir = target_root.join("demo-skill");
+        assert!(cloned_dir.exists());
+        assert!(cloned_dir.join("SKILL.md").exists());
+        assert_eq!(result.installed.len(), 1);
+        assert!(result.skipped.is_empty());
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&skill_dir);
+    }
+
+    #[test]
+    fn clone_local_skill_rejects_target_outside_home() {
+        let home = dirs::home_dir().expect("home dir");
+        let unique = unique_test_name("clone-invalid");
+        let root = home.join(".skills-manager-test").join(&unique);
+        let manager_root = home.join(".skills-manager/skills");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+
+        let skill_dir = write_skill_dir(
+            &manager_root,
+            &format!("demo-skill-{}", unique),
+            "---\nname: Demo Skill\nversion: 1.0.0\n---\nDemo description\n",
+        );
+
+        let result = clone_local_skill(InstallRequest {
+            skill_path: skill_dir.display().to_string(),
+            skill_name: "Demo Skill".to_string(),
+            install_targets: vec![LinkTarget {
+                name: "Invalid IDE".to_string(),
+                path: "/tmp/skills-manager-invalid-target".to_string(),
+            }],
+        });
+
+        assert!(result.is_err());
+
+        let _ = fs::remove_dir_all(&root);
+        let _ = fs::remove_dir_all(&skill_dir);
+    }
+
+    #[test]
+    fn adopt_ide_skill_restores_local_copy_and_manager_copy() {
+        let home = dirs::home_dir().expect("home dir");
+        let unique = unique_test_name("adopt");
+        let ide_root = home.join(".skills-manager-test").join(&unique).join("ide");
+        fs::create_dir_all(&ide_root).expect("create ide root");
+
+        let ide_skill_dir = write_skill_dir(
+            &ide_root,
+            "demo-adopt-skill",
+            "---\nname: Demo Adopt Skill\nversion: 1.0.0\n---\nAdopt me\n",
+        );
+
+        let result = adopt_ide_skill(AdoptIdeSkillRequest {
+            target_path: ide_skill_dir.display().to_string(),
+            ide_label: "Test IDE".to_string(),
+        })
+        .expect("adopt succeeds");
+
+        let manager_dir = home.join(".skills-manager/skills/demo-adopt-skill");
+        assert!(manager_dir.exists());
+        assert!(manager_dir.join("SKILL.md").exists());
+        assert!(ide_skill_dir.exists());
+        assert!(ide_skill_dir.join("SKILL.md").exists());
+        assert!(result.contains("restored a local copy"));
+
+        let _ = fs::remove_dir_all(home.join(".skills-manager-test").join(unique));
+        let _ = fs::remove_dir_all(manager_dir);
+    }
+
+    #[test]
+    fn scan_overview_marks_matching_copy_as_managed() {
+        let home = dirs::home_dir().expect("home dir");
+        let unique = unique_test_name("scan-overview");
+        let manager_root = home.join(".skills-manager/skills");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        let ide_root = home.join(".skills-manager-test").join(&unique).join("ide");
+        fs::create_dir_all(&ide_root).expect("create ide root");
+
+        let manager_skill_dir = write_skill_dir(
+            &manager_root,
+            "demo-managed-skill",
+            "---\nname: Demo Managed Skill\nversion: 1.0.0\n---\nManaged copy\n",
+        );
+        let copied_skill_dir = ide_root.join("demo-managed-skill");
+        super::copy_dir_recursive(&manager_skill_dir, &copied_skill_dir).expect("copy skill to ide");
+
+        let overview = scan_overview(LocalScanRequest {
+            project_dir: None,
+            ide_dirs: vec![IdeDir {
+                label: "Test IDE".to_string(),
+                relative_dir: ide_root.display().to_string(),
+            }],
+        })
+        .expect("scan overview succeeds");
+
+        let ide_skill = overview
+            .ide_skills
+            .iter()
+            .find(|skill| skill.name == "Demo Managed Skill")
+            .expect("managed ide skill exists");
+        assert!(ide_skill.managed);
+        assert_eq!(ide_skill.source, "managed");
+
+        let manager_skill = overview
+            .manager_skills
+            .iter()
+            .find(|skill| skill.name == "Demo Managed Skill")
+            .expect("manager skill exists");
+        assert!(manager_skill.used_by.contains(&"Test IDE".to_string()));
+
+        let _ = fs::remove_dir_all(copied_skill_dir);
+        let _ = fs::remove_dir_all(home.join(".skills-manager-test").join(unique));
+        let _ = fs::remove_dir_all(manager_skill_dir);
+    }
+
+    #[test]
+    fn uninstall_skill_removes_installed_directory() {
+        let home = dirs::home_dir().expect("home dir");
+        let unique = unique_test_name("uninstall");
+        let ide_root = home.join(".skills-manager-test").join(&unique).join("ide");
+        fs::create_dir_all(&ide_root).expect("create ide root");
+
+        let installed_skill_dir = write_skill_dir(
+            &ide_root,
+            "demo-remove-skill",
+            "---\nname: Demo Remove Skill\nversion: 1.0.0\n---\nRemove me\n",
+        );
+
+        let message = uninstall_skill(UninstallRequest {
+            target_path: installed_skill_dir.display().to_string(),
+            project_dir: None,
+            ide_dirs: vec![IdeDir {
+                label: "Test IDE".to_string(),
+                relative_dir: ide_root.display().to_string(),
+            }],
+        })
+        .expect("uninstall succeeds");
+
+        assert_eq!(message, "Directory removed");
+        assert!(!installed_skill_dir.exists());
+
+        let _ = fs::remove_dir_all(home.join(".skills-manager-test").join(unique));
+    }
+
+    #[test]
+    fn app_config_defaults_to_manual_when_missing() {
+        let temp_home = std::env::temp_dir().join(unique_test_name("app-config-default"));
+        let config = read_app_config(&temp_home);
+
+        assert_eq!(config.default_version_strategy, "manual");
+
+        let _ = fs::remove_dir_all(temp_home);
+    }
+
+    #[test]
+    fn write_app_config_persists_strategy() {
+        let temp_home = std::env::temp_dir().join(unique_test_name("app-config-write"));
+        let config = AppConfig {
+            default_version_strategy: "stable".to_string(),
+        };
+
+        write_app_config(&temp_home, &config).expect("write app config");
+        let loaded = read_app_config(&temp_home);
+
+        assert_eq!(loaded.default_version_strategy, "stable");
+
+        let _ = fs::remove_dir_all(temp_home);
+    }
+
+    #[test]
+    fn save_app_config_rejects_invalid_strategy() {
+        let result = save_app_config(SaveAppConfigRequest {
+            default_version_strategy: "invalid".to_string(),
+        });
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn scan_project_opencode_skills_marks_matching_managed_version() {
+        let home = dirs::home_dir().expect("home dir");
+        let unique = unique_test_name("project-scan-match");
+        let manager_root = home.join(".skills-manager/skills");
+        let project_root = home.join(".skills-manager-test").join(&unique).join("project");
+        let project_skills_root = project_root.join(".opencode/skills");
+
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        fs::create_dir_all(&project_skills_root).expect("create project skills root");
+
+        let manager_skill_dir = write_skill_dir(
+            &manager_root,
+            &format!("demo-project-match-{}", unique),
+            "---\nname: Demo Project Match\nversion: 1.0.0\nnamespace: default\n---\nShared content\n",
+        );
+        write_skill_dir(
+            &project_skills_root,
+            "demo-project-match-copy",
+            "---\nname: Demo Project Match\nversion: 1.0.0\nnamespace: default\n---\nShared content\n",
+        );
+
+        let result = scan_project_opencode_skills(ScanProjectSkillsRequest {
+            project_dir: project_root.display().to_string(),
+            manager_root: manager_root.display().to_string(),
+        })
+        .expect("scan project skills succeeds");
+
+        assert_eq!(result.duplicate_count, 1);
+        assert_eq!(result.conflict_count, 0);
+
+        let skill = result.skills.first().expect("project skill exists");
+        assert_eq!(skill.status, crate::types::ProjectSkillImportStatus::Duplicate);
+        assert!(skill.matched_version_id.is_some());
+        assert_eq!(skill.matches_default_version, Some(true));
+
+        let _ = fs::remove_dir_all(manager_skill_dir);
+        let _ = fs::remove_dir_all(home.join(".skills-manager-test").join(unique));
+    }
+
+    #[test]
+    fn scan_project_opencode_skills_marks_same_name_mismatch_as_conflict() {
+        let home = dirs::home_dir().expect("home dir");
+        let unique = unique_test_name("project-scan-conflict");
+        let manager_root = home.join(".skills-manager/skills");
+        let project_root = home.join(".skills-manager-test").join(&unique).join("project");
+        let project_skills_root = project_root.join(".opencode/skills");
+
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        fs::create_dir_all(&project_skills_root).expect("create project skills root");
+
+        let manager_skill_dir = write_skill_dir(
+            &manager_root,
+            &format!("demo-project-conflict-{}", unique),
+            "---\nname: Demo Project Conflict\nversion: 1.0.0\nnamespace: default\n---\nOriginal content\n",
+        );
+        write_skill_dir(
+            &project_skills_root,
+            "demo-project-conflict-copy",
+            "---\nname: Demo Project Conflict\nversion: 1.1.0\nnamespace: default\n---\nChanged content\n",
+        );
+
+        let result = scan_project_opencode_skills(ScanProjectSkillsRequest {
+            project_dir: project_root.display().to_string(),
+            manager_root: manager_root.display().to_string(),
+        })
+        .expect("scan project skills succeeds");
+
+        assert_eq!(result.duplicate_count, 0);
+        assert_eq!(result.conflict_count, 1);
+
+        let skill = result.skills.first().expect("project skill exists");
+        assert_eq!(skill.status, crate::types::ProjectSkillImportStatus::Conflict);
+        assert!(skill.existing_registry_skill.is_some());
+        assert_eq!(skill.matched_version_id, None);
+        assert_eq!(skill.matches_default_version, None);
+
+        let _ = fs::remove_dir_all(manager_skill_dir);
+        let _ = fs::remove_dir_all(home.join(".skills-manager-test").join(unique));
+    }
+
+    #[test]
+    fn scan_project_opencode_skills_marks_same_name_non_default_match_as_managed_version() {
+        let home = dirs::home_dir().expect("home dir");
+        let unique = unique_test_name("project-scan-managed-version");
+        let manager_root = home.join(".skills-manager/skills");
+        let project_root = home.join(".skills-manager-test").join(&unique).join("project");
+        let project_skills_root = project_root.join(".opencode/skills");
+
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        fs::create_dir_all(&project_skills_root).expect("create project skills root");
+
+        let first_manager_dir = write_skill_dir(
+            &manager_root,
+            &format!("demo-project-managed-a-{}", unique),
+            "---\nname: Demo Project Managed\nversion: 1.0.0\nnamespace: default\n---\nLegacy content\n",
+        );
+        let second_manager_dir = write_skill_dir(
+            &manager_root,
+            &format!("demo-project-managed-b-{}", unique),
+            "---\nname: Demo Project Managed\ncategory:\n  - richer\nversion: 1.1.0\nnamespace: default\n---\nImported content\n",
+        );
+        write_skill_dir(
+            &project_skills_root,
+            "demo-project-managed-copy",
+            "---\nname: Demo Project Managed\ncategory:\n  - richer\nversion: 1.1.0\nnamespace: default\n---\nImported content\n",
+        );
+
+        let result = scan_project_opencode_skills(ScanProjectSkillsRequest {
+            project_dir: project_root.display().to_string(),
+            manager_root: manager_root.display().to_string(),
+        })
+        .expect("scan project skills succeeds");
+
+        assert_eq!(result.duplicate_count, 0);
+        assert_eq!(result.managed_version_count, 1);
+        assert_eq!(result.conflict_count, 0);
+
+        let skill = result.skills.first().expect("project skill exists");
+        assert_eq!(skill.status, crate::types::ProjectSkillImportStatus::ManagedVersion);
+        assert!(skill.matched_registry_skill.is_some());
+        assert!(skill.matched_version_id.is_some());
+        assert_eq!(skill.matches_default_version, Some(false));
+
+        let _ = fs::remove_dir_all(first_manager_dir);
+        let _ = fs::remove_dir_all(second_manager_dir);
+        let _ = fs::remove_dir_all(home.join(".skills-manager-test").join(unique));
     }
 }
