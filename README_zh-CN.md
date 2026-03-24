@@ -2,12 +2,21 @@
 
 [English](README.md) | [中文](README_zh-CN.md)
 
-**将 skill 快速安装到 全局/项目** 
-Qing Skill Manager 是一个基于原项目重新包装与定制的跨平台 AI Skills 管理器。支持从各大主流技能市场（如 Claude Plugins、SkillsLLM、SkillsMP 等）进行聚合搜索，一键下载至统一的本地仓库，并分发到任意受支持的 AI 开发环境中。全面兼容 Windows、macOS 与 Linux。
+**一个面向多 IDE AI Skill 分发与版本管理的重新包装 fork。**
+
+Qing Skill Manager 用于搜索、导入、版本化管理并分发 AI skills 到受支持的 IDE 与项目工作区。它提供统一本地仓库、基于 clone/copy 的项目分发方式、项目侧冲突检测，以及更清晰的受管版本匹配能力，适合希望更稳定管理 skill 资产的个人开发者与团队。
+
+项目基于 **Tauri 2 + Vue 3 + Rust** 构建，核心工作流包括：
+
+- 从多个 marketplace 检索 skills
+- 统一存入本地受管仓库
+- 安装到全局 IDE 目录
+- 克隆到项目级 IDE 环境
+- 跟踪导入版本并清晰处理项目冲突
 
 ## 致谢
 
-本项目基于原始项目 [skills-manager](https://github.com/Rito-w/skills-manager) 二次开发。感谢原作者和贡献者提供的基础实现。
+Qing Skill Manager 基于原始项目 [skills-manager](https://github.com/Rito-w/skills-manager) 继续开发。感谢原作者与所有贡献者提供的基础能力与实现。 
 
 > 截图正在根据 Qing Skill Manager 新品牌重新制作。
 > 为避免与上游项目混淆，已移除继承自原项目的旧截图。
