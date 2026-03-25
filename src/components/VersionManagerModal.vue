@@ -520,7 +520,7 @@ function getSourceLabel(source: string): string {
                     {{ t("version.rename") }}
                   </button>
                   <button
-                    class="ghost danger"
+                    class="ghost danger btn-sm"
                     :disabled="version.id === skillPackage?.defaultVersion"
                     @click="openDeleteModal(version)"
                   >
@@ -566,7 +566,7 @@ function getSourceLabel(source: string): string {
                     <button class="ghost" @click="openVariantEditor(variant)">
                       {{ t("version.editVariant") }}
                     </button>
-                    <button class="ghost danger" @click="handleDeleteVariant(variant.id)">
+                    <button class="ghost danger btn-sm" @click="handleDeleteVariant(variant.id)">
                       {{ t("version.deleteVariant") }}
                     </button>
                   </div>

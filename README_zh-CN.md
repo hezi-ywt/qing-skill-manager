@@ -23,6 +23,7 @@ Qing Skill Manager 基于原始项目 [skills-manager](https://github.com/Rito-w
 
 ## ✨ 核心特性
 
+- 🧭 **按布局草图适配的 Library 工作台**：新增三栏式技能库视图，在保留原项目视觉语言的前提下统一浏览技能、检查版本与查看安装上下文
 - 🔍 **聚合市场检索**：基于公开 Registry，一站式搜索全网优质 Skills
 - 📦 **统一本地仓库**：集中化管理下载内容 (`~/.qing-skill-manager/skills`)
 - 🚀 **一键极速分发**：将统一的本地 Skills 快速安装至各个目标 IDE
@@ -69,11 +70,28 @@ xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
 - 集中俯瞰已下载到设备底层仓库的所有 Skills。
 - 点击“安装”，即可在弹出的面板中勾选一个或多个原生 / 自定义的 IDE 进行批量安装。
 
-### ⌨️ 3) IDE 纬度管理 (IDE Browse)
+### 🧱 3) Library 工作台
+
+- Local 标签页现在承载一个按布局草图适配的 **Library 工作台**，整体由左侧技能栏、中间详情区、右侧版本轨组成。
+- 左栏负责搜索、多选与切换 skill；中栏聚焦描述、路径、来源、安装状态、项目映射与克隆到项目入口；右栏展示版本列表、默认版本与版本对比入口。
+- 这个视图现在已经成为版本映射、项目使用情况、克隆到项目等交互的主前端承载面。
+
+### ⌨️ 4) IDE 纬度管理 (IDE Browse)
 
 - 灵活切换工作环境视角（如 VSCode 或 Cursor），独立查看各自已安装的技能列表。
 - 安全卸载模块：安全移除已安装技能目录，避免相互干扰。
 - 找不到您的生产力工具？只需在右上角轻松创建你的“自定义 IDE”。
+
+## 🏗 前端架构补充说明
+
+- `src/App.vue` 仍然是应用编排中心，但 Local 标签页现在会挂载 `src/components/library/LibraryWorkspace.vue`。
+- `src/components/library/` 目录承载新的 Library 域组件：
+  - `LibrarySidebar.vue`
+  - `LibraryDetailPanel.vue`
+  - `LibraryVersionRail.vue`
+  - `LibraryWorkspace.vue`
+- `src/composables/useLibraryWorkspace.ts` 基于已有本地 skills、IDE 安装信息、项目快照与版本元数据，派生出 Library 工作台所需的视图模型。
+- Market / IDE / Projects / Settings 既有流程保持不变；本轮改造重点在前端结构与交互表现，不要求修改 Rust 后端。
 
 ## 👨‍💻 安装与开发
 
@@ -97,6 +115,13 @@ pnpm tauri dev
 
 ```bash
 pnpm run check:project
+```
+
+- 针对本次 Library 工作台前端改造，建议至少执行：
+
+```bash
+pnpm run typecheck
+pnpm run build
 ```
 
 ### 打包发布

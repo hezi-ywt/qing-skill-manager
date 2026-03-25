@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qing Skill Manager · Library UI Prototype V2</title>
+  <style>
+    :root {
+      --bg: #101317;
+      --panel: #171b21;
+      --panel-soft: #1c2128;
+      --panel-strong: #1a2028;
+      --border: #2a3038;
+      --text: #edf2f7;
+      --muted: #97a3b2;
+      --muted-soft: #728091;
+      --accent: #5d9dff;
+      --accent-soft: rgba(93, 157, 255, 0.12);
+      --success: #33d68f;
+      --warning: #ffb24d;
+      --chip: #222830;
+      --radius-xl: 22px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "SF Pro Display", "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #0f1217, #0d1014 65%);
+      color: var(--text);
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: 64px 1fr;
+      height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(12, 15, 20, 0.88);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #3b61ff);
+    }
+
+    .top-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .top-tab {
+      padding: 9px 14px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .top-tab.active {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 272px 1fr;
+      min-height: 0;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 14px;
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, #12171d, #11161c);
+      overflow: hidden;
+    }
+
+    .search {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      margin-bottom: 12px;
+    }
+
+    .search::placeholder {
+      color: #778394;
+    }
+
+    .group {
+      margin-bottom: 10px;
+    }
+
+    .group-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted-soft);
+      margin-bottom: 6px;
+      font-weight: 700;
+    }
+
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .nav-list.compact {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .nav-item {
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      color: var(--muted-soft);
+      background: rgba(255,255,255,0.02);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .nav-item.active {
+      background: var(--accent-soft);
+      color: var(--text);
+      border-color: rgba(93,157,255,0.3);
+    }
+
+    .nav-item.switcher {
+      justify-content: center;
+      padding: 6px 10px;
+      min-width: 0;
+      text-align: center;
+      font-size: 11px;
+      line-height: 1.1;
+    }
+
+    .nav-count {
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--chip);
+      color: var(--muted);
+    }
+
+    .skill-list {
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .skill-item {
+      position: relative;
+      padding: 12px 12px 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.03);
+      opacity: 0.96;
+    }
+
+    .skill-item.active {
+      background: linear-gradient(180deg, rgba(93,157,255,0.14), rgba(93,157,255,0.06));
+      border-color: rgba(93,157,255,0.34);
+      opacity: 1;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+
+    .skill-item.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 12px;
+      bottom: 12px;
+      width: 3px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .skill-name {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .skill-meta {
+      font-size: 10px;
+      color: var(--muted-soft);
+      line-height: 1.45;
+    }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      padding: 22px;
+      overflow: auto;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+    }
+
+    .hero {
+      padding: 22px;
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, #1a2028, #151a21);
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+
+    .hero-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-start;
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.08;
+    }
+
+    .hero p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 720px;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 10px 13px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-soft);
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .summary-line {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--chip);
+      color: var(--muted);
+      border: 1px solid rgba(255,255,255,0.04);
+      font-size: 12px;
+    }
+
+    .tag.success { color: var(--success); }
+    .tag.warning { color: var(--warning); }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, #171d25, #141920);
+      padding: 20px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+
+    .panel-label {
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 9px;
+      margin-bottom: 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted-soft);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .info-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .overview-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .overview-block {
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .overview-block-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .overview-block-title {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .overview-block-kicker {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted-soft);
+    }
+
+    .skill-summary-text {
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 14px;
+    }
+
+    .overview-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .overview-meta-card {
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .overview-meta-label {
+      font-size: 11px;
+      color: var(--muted-soft);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .overview-meta-value {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .project-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .project-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 11px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .mapping-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .mapping-item {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .mapping-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .mapping-version {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .mapping-projects {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .mapping-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      padding-top: 2px;
+    }
+
+    .secondary-meta {
+      display: grid;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .secondary-meta-row {
+      display: grid;
+      grid-template-columns: 80px 1fr;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .secondary-meta-row label {
+      color: var(--muted-soft);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .info-row {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .info-row label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .side-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .inspection-rail {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      background: linear-gradient(180deg, #171d25, #141920);
+      padding: 20px;
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+    }
+
+    .rail-header {
+      margin-bottom: 14px;
+    }
+
+    .rail-kicker {
+      margin-bottom: 6px;
+      color: var(--muted-soft);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .rail-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .rail-subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .rail-stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .rail-stat {
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .rail-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .rail-stat-label {
+      font-size: 12px;
+      color: var(--muted-soft);
+    }
+
+    .version-select {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-soft);
+      color: var(--text);
+      margin-bottom: 14px;
+      font-size: 13px;
+    }
+
+    .version-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 420px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .version-item {
+      padding: 12px 13px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.02);
+    }
+
+    .version-item.active {
+      background: linear-gradient(180deg, rgba(93,157,255,0.14), rgba(93,157,255,0.06));
+      border-color: rgba(93,157,255,0.3);
+    }
+
+    .version-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 6px;
+      align-items: center;
+    }
+
+    .version-name {
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .version-meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .mini-card {
+      padding: 16px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .mini-card h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .mini-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 13px;
+    }
+
+    @media (max-width: 1120px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <span>Qing Skill Manager</span>
+      </div>
+
+      <nav class="top-tabs">
+        <div class="top-tab">Market</div>
+        <div class="top-tab active">Library</div>
+        <div class="top-tab">IDE</div>
+        <div class="top-tab">Projects</div>
+        <div class="top-tab">Settings</div>
+      </nav>
+
+      <div style="font-size: 13px; color: var(--muted);">Library Prototype V2</div>
+    </header>
+
+    <div class="shell">
+      <aside class="sidebar">
+        <input class="search" placeholder="Search library..." />
+
+        <div class="group">
+          <div class="group-title">Category</div>
+          <div class="nav-list compact">
+            <div class="nav-item switcher active"><span>OpenCode</span></div>
+            <div class="nav-item switcher"><span>Codex</span></div>
+            <div class="nav-item switcher"><span>Claude</span></div>
+            <div class="nav-item switcher"><span>Cursor</span></div>
+          </div>
+        </div>
+
+        <div class="group-title">Skills</div>
+        <div class="skill-list">
+          <div class="skill-item active">
+            <div class="skill-name">git-master</div>
+            <div class="skill-meta">OpenCode · 4 versions · 3 projects</div>
+          </div>
+
+          <div class="skill-item">
+            <div class="skill-name">project-sync</div>
+            <div class="skill-meta">OpenCode · 3 versions · 2 projects</div>
+          </div>
+
+          <div class="skill-item">
+            <div class="skill-name">workspace-audit</div>
+            <div class="skill-meta">Codex · 2 versions · 1 project</div>
+          </div>
+
+          <div class="skill-item">
+            <div class="skill-name">obsidian-markdown</div>
+            <div class="skill-meta">Claude · 1 version · unused</div>
+          </div>
+
+          <div class="skill-item">
+            <div class="skill-name">frontend-ui-ux</div>
+            <div class="skill-meta">Cursor · 1 version · 1 IDE</div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <section class="hero">
+          <div class="hero-row">
+            <div>
+              <h1>git-master</h1>
+              <p>
+                Git workflow assistant for commit planning, history cleanup, branch management,
+                and review-safe integration. The Library view focuses on one skill at a time,
+                with lightweight ownership context and inline version browsing.
+              </p>
+            </div>
+
+            <div class="actions">
+              <button class="btn primary">Install</button>
+              <button class="btn">Clone to Project</button>
+              <button class="btn">Open Dir</button>
+            </div>
+          </div>
+
+          <div class="summary-line">
+            <span class="tag success">2 IDE linked</span>
+            <span class="tag success">3 projects linked</span>
+            <span class="tag">4 versions</span>
+            <span class="tag">2 variants</span>
+            <span class="tag warning">1 review item</span>
+          </div>
+        </section>
+
+        <section class="content-grid">
+          <div class="panel">
+            <div class="panel-label">Primary Detail</div>
+            <h2>Overview</h2>
+            <div class="overview-stack">
+              <div class="overview-block">
+                <div class="overview-block-header">
+                  <div class="overview-block-title">Skill Summary</div>
+                  <div class="overview-block-kicker">Core</div>
+                </div>
+                <div class="skill-summary-text">
+                  Git workflow assistant for commit planning, history cleanup, branch management,
+                  and review-safe integration across shared environments and project-specific forks.
+                </div>
+                <div class="overview-meta-grid">
+                  <div class="overview-meta-card">
+                    <div class="overview-meta-label">Skill</div>
+                    <div class="overview-meta-value">git-master</div>
+                  </div>
+                  <div class="overview-meta-card">
+                    <div class="overview-meta-label">Default Version</div>
+                    <div class="overview-meta-value">v1.4.0</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="overview-block">
+                <div class="overview-block-header">
+                  <div class="overview-block-title">Linked Projects</div>
+                  <div class="overview-block-kicker">Ownership</div>
+                </div>
+                <div class="project-pills">
+                  <span class="project-pill">OpenCode</span>
+                  <span class="project-pill">Cursor</span>
+                  <span class="project-pill">project-a</span>
+                  <span class="project-pill">project-b</span>
+                  <span class="project-pill">project-c</span>
+                </div>
+              </div>
+
+              <div class="overview-block">
+                <div class="overview-block-header">
+                  <div class="overview-block-title">Version Mapping</div>
+                  <div class="overview-block-kicker">Projects by Version</div>
+                </div>
+                <div class="mapping-list">
+                  <div class="mapping-item">
+                    <div class="mapping-version">v1.4.0</div>
+                    <div class="mapping-projects">
+                      <span class="project-pill">OpenCode</span>
+                      <span class="project-pill">Cursor</span>
+                      <span class="project-pill">project-a</span>
+                    </div>
+                  </div>
+                  <div class="mapping-item">
+                    <div class="mapping-version">v1.3.0</div>
+                    <div class="mapping-projects">
+                      <span class="project-pill">project-b</span>
+                    </div>
+                  </div>
+                  <div class="mapping-item">
+                    <div class="mapping-version">enterprise-fork</div>
+                    <div class="mapping-projects">
+                      <span class="project-pill">project-c</span>
+                    </div>
+                  </div>
+                  <div class="mapping-item">
+                    <div class="mapping-version">review-branch</div>
+                    <div class="mapping-note">Temporary validation branch pending merge decision.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="overview-block">
+                <div class="overview-block-header">
+                  <div class="overview-block-title">Secondary Info</div>
+                  <div class="overview-block-kicker">Metadata</div>
+                </div>
+                <div class="secondary-meta">
+                  <div class="secondary-meta-row">
+                    <label>Source</label>
+                    <div>Marketplace + imported project copies</div>
+                  </div>
+                  <div class="secondary-meta-row">
+                    <label>Path</label>
+                    <div>~/.qing-skill-manager/skills/git-master</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="side-stack inspection-rail">
+            <div class="rail-header">
+              <div class="rail-kicker">Inspection Rail</div>
+              <div class="rail-title">Version Stack Preview</div>
+              <div class="rail-subtitle">Compact version inspection for active lineage, forks, and pending review branches.</div>
+            </div>
+
+            <div class="rail-stats">
+              <div class="rail-stat">
+                <div class="rail-stat-value">4</div>
+                <div class="rail-stat-label">Versions</div>
+              </div>
+              <div class="rail-stat">
+                <div class="rail-stat-value">2</div>
+                <div class="rail-stat-label">Variants</div>
+              </div>
+            </div>
+
+            <div>
+              <select class="version-select">
+                <option>Default Version · v1.4.0</option>
+                <option>All Versions Summary</option>
+                <option>Version · v1.3.0</option>
+                <option>Version · v1.2.0</option>
+                <option>Variant · enterprise-fork</option>
+              </select>
+
+              <div class="version-list">
+                <div class="version-item active">
+                  <div class="version-top">
+                    <div class="version-name">v1.4.0</div>
+                    <span class="tag success">default</span>
+                  </div>
+                  <div class="version-meta">2 IDE · 1 project · market source</div>
+                </div>
+
+                <div class="version-item">
+                  <div class="version-top">
+                    <div class="version-name">v1.3.0</div>
+                    <span class="tag warning">legacy</span>
+                  </div>
+                  <div class="version-meta">1 project · still referenced</div>
+                </div>
+
+                <div class="version-item">
+                  <div class="version-top">
+                    <div class="version-name">v1.2.0</div>
+                    <span class="tag">history</span>
+                  </div>
+                  <div class="version-meta">base for custom project fork</div>
+                </div>
+
+                <div class="version-item">
+                  <div class="version-top">
+                    <div class="version-name">enterprise-fork</div>
+                    <span class="tag">variant</span>
+                  </div>
+                  <div class="version-meta">1 project · custom branch</div>
+                </div>
+
+                <div class="version-item">
+                  <div class="version-top">
+                    <div class="version-name">v1.1.0</div>
+                    <span class="tag">history</span>
+                  </div>
+                  <div class="version-meta">Archived base version · internal migration source</div>
+                </div>
+
+                <div class="version-item">
+                  <div class="version-top">
+                    <div class="version-name">project-b-fork</div>
+                    <span class="tag">variant</span>
+                  </div>
+                  <div class="version-meta">1 project · customized prompts and install rules</div>
+                </div>
+
+                <div class="version-item">
+                  <div class="version-top">
+                    <div class="version-name">review-branch</div>
+                    <span class="tag warning">review</span>
+                  </div>
+                  <div class="version-meta">Pending merge · temporary validation branch</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mini-card">
+              <h3>Current Version View</h3>
+              <ul>
+                <li>Viewing default version v1.4.0</li>
+                <li>Primary ownership: OpenCode, Cursor, project-a</li>
+                <li>Leave space here later for diff preview or quick compare</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

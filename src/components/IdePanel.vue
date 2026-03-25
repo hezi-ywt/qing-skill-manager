@@ -140,7 +140,7 @@ function adoptSelected() {
           {{ t("ide.adoptSelected", { count: selectedUnmanagedSkills.length }) }}
         </button>
         <button
-          class="ghost danger"
+          class="ghost danger btn-sm"
           :disabled="selectedSkills.length === 0 || localLoading"
           @click="uninstallSelected"
         >

@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qing Skill Manager · Library UI Prototype V1</title>
+  <style>
+    :root {
+      --bg: #0f1217;
+      --bg-elevated: #151a21;
+      --bg-soft: #1a2029;
+      --bg-accent: rgba(92, 154, 255, 0.12);
+      --border: #2a313d;
+      --border-strong: #415067;
+      --text: #eef3f8;
+      --muted: #9aa7b5;
+      --accent: #63a4ff;
+      --accent-strong: #7db4ff;
+      --success: #39d98a;
+      --warning: #ffba52;
+      --danger: #ff7575;
+      --chip: #232a34;
+      --shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+      --radius-xl: 24px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "SF Pro Display", "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(99, 164, 255, 0.08), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(57, 217, 138, 0.05), transparent 24%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: 68px 1fr;
+      height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(10, 13, 18, 0.82);
+      backdrop-filter: blur(14px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), #3958ff);
+      box-shadow: 0 10px 24px rgba(99, 164, 255, 0.28);
+    }
+
+    .top-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 6px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .top-tab {
+      padding: 10px 16px;
+      border-radius: 12px;
+      color: var(--muted);
+      font-size: 14px;
+      letter-spacing: 0.01em;
+    }
+
+    .top-tab.active {
+      background: var(--bg-elevated);
+      color: var(--text);
+      border: 1px solid var(--border);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      min-height: 0;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      padding: 18px 16px 16px;
+      border-right: 1px solid var(--border);
+      background: linear-gradient(180deg, #141920, #12161c);
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    .search {
+      width: 100%;
+      padding: 13px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      color: var(--text);
+      margin-bottom: 14px;
+      outline: none;
+    }
+
+    .search::placeholder {
+      color: #718093;
+    }
+
+    .filter-row,
+    .sort-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .chip {
+      padding: 7px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--chip);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .chip.active {
+      color: var(--text);
+      border-color: rgba(99, 164, 255, 0.38);
+      background: var(--bg-accent);
+    }
+
+    .skill-list {
+      overflow: auto;
+      padding-right: 2px;
+    }
+
+    .skill-item {
+      position: relative;
+      padding: 14px 14px 14px 16px;
+      margin-bottom: 10px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .skill-item.active {
+      background: linear-gradient(180deg, rgba(99, 164, 255, 0.12), rgba(99, 164, 255, 0.05));
+      border-color: rgba(99, 164, 255, 0.42);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    .skill-item.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 14px;
+      bottom: 14px;
+      width: 3px;
+      border-radius: 999px;
+      background: var(--accent);
+    }
+
+    .skill-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .skill-name {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .item-badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--chip);
+      color: var(--muted);
+    }
+
+    .item-badge.warning {
+      color: var(--warning);
+    }
+
+    .item-badge.success {
+      color: var(--success);
+    }
+
+    .skill-meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+
+    .micro-badges {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .micro-badge {
+      padding: 4px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .workspace {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 22px 22px;
+      gap: 16px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+    }
+
+    .hero {
+      padding: 22px;
+      border-radius: var(--radius-xl);
+      background: linear-gradient(135deg, rgba(21, 26, 33, 0.95), rgba(15, 18, 23, 0.94));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+
+    .hero-title h1 {
+      margin: 0 0 10px;
+      font-size: 30px;
+      line-height: 1.05;
+    }
+
+    .hero-title p {
+      margin: 0;
+      max-width: 760px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      padding: 11px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--bg-soft);
+      color: var(--text);
+      font-size: 14px;
+      cursor: default;
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, var(--accent), #457fff);
+      border-color: transparent;
+      color: white;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .summary-card {
+      padding: 12px 14px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .summary-card small {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .summary-card strong {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .context-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+      border-radius: var(--radius-lg);
+      background: rgba(255, 255, 255, 0.022);
+      border: 1px solid var(--border);
+    }
+
+    .context-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .context-label {
+      font-size: 13px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .context-select {
+      min-width: 280px;
+      padding: 11px 13px;
+      border-radius: 14px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-soft);
+      color: var(--text);
+    }
+
+    .subtabs {
+      display: flex;
+      gap: 8px;
+    }
+
+    .subtab {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--muted);
+    }
+
+    .subtab.active {
+      color: var(--text);
+      background: var(--bg-accent);
+      border-color: rgba(99, 164, 255, 0.4);
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 16px;
+      min-height: 0;
+      flex: 1;
+    }
+
+    .panel {
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      padding: 18px;
+      min-height: 0;
+    }
+
+    .panel h3 {
+      margin: 0 0 14px;
+      font-size: 16px;
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .overview-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .overview-row {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .overview-row label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .overview-row div {
+      line-height: 1.5;
+    }
+
+    .ownership-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .ownership-tile {
+      padding: 12px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.025);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .ownership-tile small {
+      display: block;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .ownership-tile strong {
+      font-size: 22px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 8px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid rgba(255,255,255,0.05);
+      background: var(--chip);
+      color: var(--muted);
+    }
+
+    .tag.success {
+      color: var(--success);
+    }
+
+    .tag.warning {
+      color: var(--warning);
+    }
+
+    .tag.info {
+      color: var(--accent-strong);
+    }
+
+    .mini-section {
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+
+    .mini-section h4 {
+      margin: 0 0 10px;
+      font-size: 14px;
+    }
+
+    .kv {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 0;
+      font-size: 13px;
+      color: var(--muted);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .kv:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .footer-note {
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(99, 164, 255, 0.08);
+      border: 1px solid rgba(99, 164, 255, 0.14);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1200px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <span>Qing Skill Manager</span>
+      </div>
+
+      <nav class="top-tabs">
+        <div class="top-tab">Market</div>
+        <div class="top-tab active">Library</div>
+        <div class="top-tab">IDE</div>
+        <div class="top-tab">Projects</div>
+        <div class="top-tab">Settings</div>
+      </nav>
+
+      <div style="color: var(--muted); font-size: 13px;">Library Workspace Prototype</div>
+    </header>
+
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="section-title">Skill Navigator</div>
+        <input class="search" placeholder="Search by name, description, path..." />
+
+        <div class="filter-row">
+          <span class="chip active">All</span>
+          <span class="chip">Installed</span>
+          <span class="chip">Project-linked</span>
+          <span class="chip">Multi-version</span>
+        </div>
+
+        <div class="sort-row">
+          <span class="chip active">Name</span>
+          <span class="chip">Recent</span>
+          <span class="chip">Most Used</span>
+        </div>
+
+        <div class="skill-list">
+          <div class="skill-item active">
+            <div class="skill-title-row">
+              <div class="skill-name">git-master</div>
+              <span class="item-badge success">linked</span>
+            </div>
+            <div class="skill-meta">4 versions · 2 IDE · 3 projects</div>
+            <div class="micro-badges">
+              <span class="micro-badge">default v1.4.0</span>
+              <span class="micro-badge">2 variants</span>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <div class="skill-title-row">
+              <div class="skill-name">frontend-ui-ux</div>
+              <span class="item-badge success">linked</span>
+            </div>
+            <div class="skill-meta">1 version · 1 IDE · 0 projects</div>
+            <div class="micro-badges">
+              <span class="micro-badge">single-version</span>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <div class="skill-title-row">
+              <div class="skill-name">obsidian-markdown</div>
+              <span class="item-badge">unused</span>
+            </div>
+            <div class="skill-meta">2 versions · 0 IDE · 0 projects</div>
+            <div class="micro-badges">
+              <span class="micro-badge">multi-version</span>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <div class="skill-title-row">
+              <div class="skill-name">project-sync</div>
+              <span class="item-badge warning">conflict</span>
+            </div>
+            <div class="skill-meta">3 versions · 1 IDE · 2 projects</div>
+            <div class="micro-badges">
+              <span class="micro-badge">project-linked</span>
+              <span class="micro-badge">managed version</span>
+            </div>
+          </div>
+
+          <div class="skill-item">
+            <div class="skill-title-row">
+              <div class="skill-name">version-audit</div>
+              <span class="item-badge">variant</span>
+            </div>
+            <div class="skill-meta">5 versions · 0 IDE · 4 projects</div>
+            <div class="micro-badges">
+              <span class="micro-badge">3 variants</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <section class="hero">
+          <div class="hero-top">
+            <div class="hero-title">
+              <h1>git-master</h1>
+              <p>
+                Git workflow assistant for commit planning, history cleanup, branch management,
+                and review-safe integration. This Library workspace focuses on one skill at a time,
+                with version-aware usage tracking across IDEs and projects.
+              </p>
+            </div>
+
+            <div class="action-row">
+              <button class="btn primary">Install</button>
+              <button class="btn">Clone to Project</button>
+              <button class="btn">Open Dir</button>
+              <button class="btn">Delete</button>
+            </div>
+          </div>
+
+          <div class="summary-grid">
+            <div class="summary-card">
+              <small>Default Version</small>
+              <strong>v1.4.0</strong>
+            </div>
+            <div class="summary-card">
+              <small>Versions</small>
+              <strong>4</strong>
+            </div>
+            <div class="summary-card">
+              <small>Variants</small>
+              <strong>2</strong>
+            </div>
+            <div class="summary-card">
+              <small>IDE Links</small>
+              <strong>2</strong>
+            </div>
+            <div class="summary-card">
+              <small>Project Links</small>
+              <strong>3</strong>
+            </div>
+            <div class="summary-card">
+              <small>Conflicts</small>
+              <strong>1</strong>
+            </div>
+          </div>
+
+          <div class="context-bar">
+            <div class="context-left">
+              <span class="context-label">Viewing</span>
+              <select class="context-select">
+                <option>Default Version · v1.4.0</option>
+                <option>All Versions Summary</option>
+                <option>Version · v1.3.0</option>
+                <option>Version · v1.2.0</option>
+                <option>Variant · enterprise-fork</option>
+              </select>
+              <span class="tag info">Current focus: version-aware ownership</span>
+            </div>
+
+            <div class="action-row">
+              <button class="btn">Compare</button>
+              <button class="btn">Manage Versions</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="subtabs">
+          <div class="subtab active">Overview</div>
+          <div class="subtab">Versions</div>
+          <div class="subtab">Ownership</div>
+        </div>
+
+        <section class="content-grid">
+          <div class="stack">
+            <div class="panel">
+              <h3>Overview</h3>
+              <div class="overview-list">
+                <div class="overview-row">
+                  <label>Source</label>
+                  <div>Marketplace + imported project copies</div>
+                </div>
+                <div class="overview-row">
+                  <label>Library Path</label>
+                  <div>~/.qing-skill-manager/skills/git-master</div>
+                </div>
+                <div class="overview-row">
+                  <label>Current View</label>
+                  <div>Default version v1.4.0 with ownership-aware context</div>
+                </div>
+                <div class="overview-row">
+                  <label>Primary Status</label>
+                  <div>
+                    <span class="tag success">linked</span>
+                    <span class="tag info">multi-version</span>
+                    <span class="tag warning">1 conflict</span>
+                  </div>
+                </div>
+                <div class="overview-row">
+                  <label>Purpose</label>
+                  <div>
+                    Used across shared IDE environments and project-specific forks.
+                    The workspace should let users inspect one skill deeply instead of scanning cards.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Ownership Index</h3>
+              <div class="ownership-summary">
+                <div class="ownership-tile">
+                  <small>Total References</small>
+                  <strong>5</strong>
+                </div>
+                <div class="ownership-tile">
+                  <small>IDE Environments</small>
+                  <strong>2</strong>
+                </div>
+                <div class="ownership-tile">
+                  <small>Projects</small>
+                  <strong>3</strong>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Environment</th>
+                    <th>Type</th>
+                    <th>Version</th>
+                    <th>Variant</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>OpenCode</td>
+                    <td>IDE</td>
+                    <td>v1.4.0</td>
+                    <td>default</td>
+                    <td><span class="tag success">active</span></td>
+                  </tr>
+                  <tr>
+                    <td>Cursor</td>
+                    <td>IDE</td>
+                    <td>v1.4.0</td>
+                    <td>default</td>
+                    <td><span class="tag success">active</span></td>
+                  </tr>
+                  <tr>
+                    <td>project-a</td>
+                    <td>Project</td>
+                    <td>v1.4.0</td>
+                    <td>default</td>
+                    <td><span class="tag info">linked</span></td>
+                  </tr>
+                  <tr>
+                    <td>project-b</td>
+                    <td>Project</td>
+                    <td>v1.3.0</td>
+                    <td>legacy</td>
+                    <td><span class="tag warning">review</span></td>
+                  </tr>
+                  <tr>
+                    <td>project-c</td>
+                    <td>Project</td>
+                    <td>v1.2.0</td>
+                    <td>enterprise-fork</td>
+                    <td><span class="tag info">custom</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="stack">
+            <div class="panel">
+              <h3>Version Focus</h3>
+
+              <div class="mini-section" style="margin-bottom: 12px;">
+                <h4>Current Version Snapshot</h4>
+                <div class="kv"><span>Display Name</span><strong>v1.4.0</strong></div>
+                <div class="kv"><span>Source Type</span><strong>market</strong></div>
+                <div class="kv"><span>Parent Version</span><strong>v1.3.0</strong></div>
+                <div class="kv"><span>Default</span><strong>Yes</strong></div>
+              </div>
+
+              <div class="mini-section">
+                <h4>Version Actions</h4>
+                <div class="action-row">
+                  <button class="btn">Rename</button>
+                  <button class="btn">Set Default</button>
+                  <button class="btn">Create Variant</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Version Stack Preview</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Version</th>
+                    <th>Used By</th>
+                    <th>Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>v1.4.0</td>
+                    <td>2 IDE · 1 Project</td>
+                    <td><span class="tag success">default</span></td>
+                  </tr>
+                  <tr>
+                    <td>v1.3.0</td>
+                    <td>1 Project</td>
+                    <td><span class="tag warning">legacy</span></td>
+                  </tr>
+                  <tr>
+                    <td>v1.2.0</td>
+                    <td>1 Project</td>
+                    <td><span class="tag info">fork base</span></td>
+                  </tr>
+                  <tr>
+                    <td>enterprise-fork</td>
+                    <td>1 Project</td>
+                    <td><span class="tag info">variant</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="footer-note">
+              Design intent: keep top navigation stable, move object-level navigation into the Library sidebar,
+              and let the center workspace switch between default-version summary and specific-version ownership views.
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

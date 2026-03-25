@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import { buildProjectCloneTargetPath, getProjectIdeRelativeDir } from "./constants.ts";
 
 function runConstantsTests() {
-  // Test getProjectIdeRelativeDir for OpenCode (currently the only configured IDE)
+  // Test getProjectIdeRelativeDir for all supported IDEs
   assert.equal(getProjectIdeRelativeDir("OpenCode"), ".opencode/skills");
+  assert.equal(getProjectIdeRelativeDir("Claude Code"), ".claude/skills");
+  assert.equal(getProjectIdeRelativeDir("Cursor"), ".cursor/skills");
+  assert.equal(getProjectIdeRelativeDir("Windsurf"), ".windsurf/skills");
+  assert.equal(getProjectIdeRelativeDir("Kiro"), ".kiro/skills");
+  assert.equal(getProjectIdeRelativeDir("VSCode"), ".github/skills");
+  assert.equal(getProjectIdeRelativeDir("Antigravity"), ".gemini/antigravity/skills");
   assert.equal(getProjectIdeRelativeDir("UnknownIDE"), null);
   assert.equal(getProjectIdeRelativeDir(""), null);
 
@@ -39,7 +45,21 @@ function runConstantsTests() {
     "/tmp/My Project Name/.opencode/skills"
   );
 
-  console.log("✓ All constants tests passed (8 assertions)");
+  // Test buildProjectCloneTargetPath with newly added IDEs
+  assert.equal(
+    buildProjectCloneTargetPath("/tmp/demo", "Claude Code"),
+    "/tmp/demo/.claude/skills"
+  );
+  assert.equal(
+    buildProjectCloneTargetPath("/tmp/demo", "Cursor"),
+    "/tmp/demo/.cursor/skills"
+  );
+  assert.equal(
+    buildProjectCloneTargetPath("/tmp/demo", "Windsurf"),
+    "/tmp/demo/.windsurf/skills"
+  );
+
+  console.log("✓ All constants tests passed (17 assertions)");
 }
 
 runConstantsTests();

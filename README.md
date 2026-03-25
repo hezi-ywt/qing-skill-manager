@@ -23,6 +23,7 @@ Qing Skill Manager is built on top of the original [skills-manager](https://gith
 
 ## ✨ Core Features
 
+- 🧭 **Layout-Adapted Library Workspace**: A new three-column Library view for browsing skills, inspecting versions, and seeing installation context at a glance while preserving the app's original visual language
 - 🔍 **Aggregated Market Search**: Search quality skills from public registries in one place
 - 📦 **Unified Local Repository**: Centralized management of downloaded skills (`~/.qing-skill-manager/skills`)
 - 🚀 **One-Click Installation**: Install unified local skills to target IDEs in seconds
@@ -69,11 +70,28 @@ xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
 - Overview of all skills currently downloaded to your local repository.
 - Click "Install" to select target IDEs for deployment.
 
-### ⌨️ 3) IDE Browser
+### 🧱 3) Library Workspace
+
+- The Local tab now uses a **Library workspace** adapted from the layout sketch, with sidebar, detail panel, and version rail.
+- The left column supports quick search, multi-select, and skill switching; the center column focuses on description, path, source, installation status, project mappings, and clone-to-project entry points; the right rail surfaces version history and comparison actions.
+- This view is now the main frontend surface for version mapping, project usage inspection, and clone-to-project workflows.
+
+### ⌨️ 4) IDE Browser
 
 - Switch workspace perspective (e.g., VSCode or Cursor) to view installed skills for each IDE.
 - Safe Uninstallation: Removes the installed skill directory safely.
 - Can't find your IDE? Click "Add Custom IDE" in the top right to register its skills directory.
+
+## 🏗 Frontend Architecture Notes
+
+- `src/App.vue` remains the application orchestrator, but the Local tab now mounts `src/components/library/LibraryWorkspace.vue`.
+- `src/components/library/` contains the new Library domain UI:
+  - `LibrarySidebar.vue`
+  - `LibraryDetailPanel.vue`
+  - `LibraryVersionRail.vue`
+  - `LibraryWorkspace.vue`
+- `src/composables/useLibraryWorkspace.ts` derives UI-ready Library data from existing local skills, IDE installations, project snapshots, and version metadata.
+- Existing Market / IDE / Projects / Settings flows remain intact; the refactor is intentionally frontend-focused and does not require Rust backend changes.
 
 ## 👨‍💻 Installation & Development
 
@@ -97,6 +115,13 @@ pnpm tauri dev
 
 ```bash
 pnpm run check:project
+```
+
+- Frontend-only verification for the Library workspace refactor:
+
+```bash
+pnpm run typecheck
+pnpm run build
 ```
 
 ### Build & Release

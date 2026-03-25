@@ -179,10 +179,6 @@ pub async fn search_marketplaces(
     enabled_markets: HashMap<String, bool>,
 ) -> Result<RemoteSkillsViewResponse, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let mut skills: Vec<RemoteSkillView> = Vec::new();
-        let mut total: u64 = 0;
-        let mut market_statuses: Vec<MarketStatus> = Vec::new();
-
         let trimmed = query.trim();
         let query_param = if trimmed.is_empty() {
             String::new()
@@ -192,192 +188,216 @@ pub async fn search_marketplaces(
 
         let limit = if limit == 0 { 20 } else { limit };
 
-        let claude_market_id = "claude-plugins";
-        let claude_market_label = "Claude Plugins";
+        // Use std::thread::scope to run three marketplace searches concurrently
+        let results = std::thread::scope(|scope| {
+            // Prepare data for Claude Plugins marketplace
+            let claude_market_id = "claude-plugins";
+            let claude_market_label = "Claude Plugins";
+            let claude_enabled = *enabled_markets.get(claude_market_id).unwrap_or(&true);
 
-        if *enabled_markets.get(claude_market_id).unwrap_or(&true) {
-            let mut url = String::from("https://claude-plugins.dev/api/skills?");
-            if !query_param.is_empty() {
-                url.push_str(&query_param);
-                url.push('&');
-            }
-            url.push_str(&format!("limit={}&offset={}", limit, offset));
+            let query_param_clone = query_param.clone();
+            let claude_handle = scope.spawn(move || {
+                let mut skills = Vec::new();
+                let mut total = 0u64;
+                let mut status = MarketStatus {
+                    id: claude_market_id.to_string(),
+                    name: claude_market_label.to_string(),
+                    status: MarketStatusType::Online,
+                    error: None,
+                };
 
-            match download_bytes(
-                &url,
-                &[
-                    ("Accept", "application/json"),
-                    ("User-Agent", "qing-skill-manager/0.1"),
-                ],
-            ) {
-                Ok(buf) => {
-                    if let Ok(parsed) = serde_json::from_slice::<RemoteSkillsResponse>(&buf) {
-                        total += parsed.total;
-                        skills.extend(parsed.skills.into_iter().map(|skill| {
-                            map_claude_skill(skill, claude_market_id, claude_market_label)
-                        }));
-                        market_statuses.push(MarketStatus {
-                            id: claude_market_id.to_string(),
-                            name: claude_market_label.to_string(),
-                            status: MarketStatusType::Online,
-                            error: None,
-                        });
-                    } else {
-                        market_statuses.push(MarketStatus {
-                            id: claude_market_id.to_string(),
-                            name: claude_market_label.to_string(),
-                            status: MarketStatusType::Error,
-                            error: Some("Failed to parse response".to_string()),
-                        });
+                if claude_enabled {
+                    let mut url = String::from("https://claude-plugins.dev/api/skills?");
+                    if !query_param_clone.is_empty() {
+                        url.push_str(&query_param_clone);
+                        url.push('&');
                     }
-                }
-                Err(e) => {
-                    println!("Error fetching from Claude Plugins: {}", e);
-                    market_statuses.push(MarketStatus {
-                        id: claude_market_id.to_string(),
-                        name: claude_market_label.to_string(),
-                        status: MarketStatusType::Error,
-                        error: Some(e),
-                    });
-                }
-            }
-        } else {
-            market_statuses.push(MarketStatus {
-                id: claude_market_id.to_string(),
-                name: claude_market_label.to_string(),
-                status: MarketStatusType::Online,
-                error: None,
-            });
-        }
+                    url.push_str(&format!("limit={}&offset={}", limit, offset));
 
-        let skillsllm_market_id = "skillsllm";
-        let skillsllm_market_label = "SkillsLLM";
-
-        if *enabled_markets.get(skillsllm_market_id).unwrap_or(&true) {
-            let skillsllm_page = (offset / limit).saturating_add(1);
-            let mut skillsllm_url = String::from("https://skillsllm.com/api/skills?");
-            if !query_param.is_empty() {
-                skillsllm_url.push_str(&format!("q={}&", urlencoding::encode(trimmed)));
-            }
-            skillsllm_url.push_str(&format!("page={}&limit={}", skillsllm_page, limit));
-
-            match download_bytes(
-                &skillsllm_url,
-                &[
-                    ("Accept", "application/json"),
-                    ("User-Agent", "qing-skill-manager/0.1"),
-                ],
-            ) {
-                Ok(buf) => {
-                    if let Ok((parsed_skills, parsed_total)) =
-                        parse_skillsllm(&buf, skillsllm_market_id, skillsllm_market_label)
-                    {
-                        total += parsed_total;
-                        skills.extend(parsed_skills);
-                        market_statuses.push(MarketStatus {
-                            id: skillsllm_market_id.to_string(),
-                            name: skillsllm_market_label.to_string(),
-                            status: MarketStatusType::Online,
-                            error: None,
-                        });
-                    } else {
-                        market_statuses.push(MarketStatus {
-                            id: skillsllm_market_id.to_string(),
-                            name: skillsllm_market_label.to_string(),
-                            status: MarketStatusType::Error,
-                            error: Some("Failed to parse response".to_string()),
-                        });
-                    }
-                }
-                Err(e) => {
-                    println!("Error fetching from SkillsLLM: {}", e);
-                    market_statuses.push(MarketStatus {
-                        id: skillsllm_market_id.to_string(),
-                        name: skillsllm_market_label.to_string(),
-                        status: MarketStatusType::Error,
-                        error: Some(e),
-                    });
-                }
-            }
-        } else {
-            market_statuses.push(MarketStatus {
-                id: skillsllm_market_id.to_string(),
-                name: skillsllm_market_label.to_string(),
-                status: MarketStatusType::Online,
-                error: None,
-            });
-        }
-
-        let skillsmp_market_id = "skillsmp";
-        let skillsmp_market_label = "SkillsMP";
-
-        if *enabled_markets.get(skillsmp_market_id).unwrap_or(&false) {
-            if let Some(api_key) = api_keys.get(skillsmp_market_id).filter(|k| !k.is_empty()) {
-                let skillsmp_page = (offset / limit).saturating_add(1);
-                let skillsmp_url = format!(
-                    "https://skillsmp.com/api/v1/skills/search?q={}&page={}&limit={}",
-                    urlencoding::encode(trimmed),
-                    skillsmp_page,
-                    limit
-                );
-
-                let auth_header = format!("Bearer {}", api_key);
-
-                match download_bytes(
-                    &skillsmp_url,
-                    &[
-                        ("Accept", "application/json"),
-                        ("User-Agent", "qing-skill-manager/0.1"),
-                        ("Authorization", &auth_header),
-                    ],
-                ) {
-                    Ok(buf) => {
-                        if let Ok((parsed_skills, parsed_total)) =
-                            parse_skillsmp(&buf, skillsmp_market_id, skillsmp_market_label)
-                        {
-                            total += parsed_total;
-                            skills.extend(parsed_skills);
-                            market_statuses.push(MarketStatus {
-                                id: skillsmp_market_id.to_string(),
-                                name: skillsmp_market_label.to_string(),
-                                status: MarketStatusType::Online,
-                                error: None,
-                            });
-                        } else {
-                            market_statuses.push(MarketStatus {
-                                id: skillsmp_market_id.to_string(),
-                                name: skillsmp_market_label.to_string(),
-                                status: MarketStatusType::Error,
-                                error: Some("Failed to parse response".to_string()),
-                            });
+                    match download_bytes(
+                        &url,
+                        &[
+                            ("Accept", "application/json"),
+                            ("User-Agent", "qing-skill-manager/0.1"),
+                        ],
+                    ) {
+                        Ok(buf) => {
+                            if let Ok(parsed) = serde_json::from_slice::<RemoteSkillsResponse>(&buf) {
+                                total = parsed.total;
+                                skills = parsed.skills.into_iter().map(|skill| {
+                                    map_claude_skill(skill, claude_market_id, claude_market_label)
+                                }).collect();
+                            } else {
+                                status.status = MarketStatusType::Error;
+                                status.error = Some("Failed to parse response".to_string());
+                            }
+                        }
+                        Err(e) => {
+                            println!("Error fetching from Claude Plugins: {}", e);
+                            status.status = MarketStatusType::Error;
+                            status.error = Some(e);
                         }
                     }
-                    Err(e) => {
-                        println!("Error fetching from SkillsMP: {}", e);
-                        market_statuses.push(MarketStatus {
-                            id: skillsmp_market_id.to_string(),
-                            name: skillsmp_market_label.to_string(),
-                            status: MarketStatusType::Error,
-                            error: Some(e),
-                        });
+                }
+
+                (skills, total, status)
+            });
+
+            // Prepare data for SkillsLLM marketplace
+            let skillsllm_market_id = "skillsllm";
+            let skillsllm_market_label = "SkillsLLM";
+            let skillsllm_enabled = *enabled_markets.get(skillsllm_market_id).unwrap_or(&true);
+
+            let query_param_clone = query_param.clone();
+            let skillsllm_handle = scope.spawn(move || {
+                let mut skills = Vec::new();
+                let mut total = 0u64;
+                let mut status = MarketStatus {
+                    id: skillsllm_market_id.to_string(),
+                    name: skillsllm_market_label.to_string(),
+                    status: MarketStatusType::Online,
+                    error: None,
+                };
+
+                if skillsllm_enabled {
+                    let skillsllm_page = (offset / limit).saturating_add(1);
+                    let mut skillsllm_url = String::from("https://skillsllm.com/api/skills?");
+                    if !query_param_clone.is_empty() {
+                        skillsllm_url.push_str(&format!("q={}&", urlencoding::encode(trimmed)));
+                    }
+                    skillsllm_url.push_str(&format!("page={}&limit={}", skillsllm_page, limit));
+
+                    match download_bytes(
+                        &skillsllm_url,
+                        &[
+                            ("Accept", "application/json"),
+                            ("User-Agent", "qing-skill-manager/0.1"),
+                        ],
+                    ) {
+                        Ok(buf) => {
+                            if let Ok((parsed_skills, parsed_total)) =
+                                parse_skillsllm(&buf, skillsllm_market_id, skillsllm_market_label)
+                            {
+                                total = parsed_total;
+                                skills = parsed_skills;
+                            } else {
+                                status.status = MarketStatusType::Error;
+                                status.error = Some("Failed to parse response".to_string());
+                            }
+                        }
+                        Err(e) => {
+                            println!("Error fetching from SkillsLLM: {}", e);
+                            status.status = MarketStatusType::Error;
+                            status.error = Some(e);
+                        }
                     }
                 }
-            } else {
-                market_statuses.push(MarketStatus {
+
+                (skills, total, status)
+            });
+
+            // Prepare data for SkillsMP marketplace
+            let skillsmp_market_id = "skillsmp";
+            let skillsmp_market_label = "SkillsMP";
+            let skillsmp_enabled = *enabled_markets.get(skillsmp_market_id).unwrap_or(&false);
+            let skillsmp_api_key = api_keys.get(skillsmp_market_id).cloned();
+
+            let skillsmp_handle = scope.spawn(move || {
+                let mut skills = Vec::new();
+                let mut total = 0u64;
+                let mut status = MarketStatus {
                     id: skillsmp_market_id.to_string(),
                     name: skillsmp_market_label.to_string(),
-                    status: MarketStatusType::NeedsKey,
+                    status: if skillsmp_enabled { MarketStatusType::NeedsKey } else { MarketStatusType::NeedsKey },
                     error: None,
-                });
-            }
-        } else {
-            market_statuses.push(MarketStatus {
-                id: skillsmp_market_id.to_string(),
-                name: skillsmp_market_label.to_string(),
-                status: MarketStatusType::NeedsKey,
-                error: None,
+                };
+
+                if skillsmp_enabled {
+                    if let Some(api_key) = skillsmp_api_key.as_ref().filter(|k| !k.is_empty()) {
+                        let skillsmp_page = (offset / limit).saturating_add(1);
+                        let skillsmp_url = format!(
+                            "https://skillsmp.com/api/v1/skills/search?q={}&page={}&limit={}",
+                            urlencoding::encode(trimmed),
+                            skillsmp_page,
+                            limit
+                        );
+
+                        let auth_header = format!("Bearer {}", api_key);
+
+                        match download_bytes(
+                            &skillsmp_url,
+                            &[
+                                ("Accept", "application/json"),
+                                ("User-Agent", "qing-skill-manager/0.1"),
+                                ("Authorization", &auth_header),
+                            ],
+                        ) {
+                            Ok(buf) => {
+                                if let Ok((parsed_skills, parsed_total)) =
+                                    parse_skillsmp(&buf, skillsmp_market_id, skillsmp_market_label)
+                                {
+                                    total = parsed_total;
+                                    skills = parsed_skills;
+                                    status.status = MarketStatusType::Online;
+                                } else {
+                                    status.status = MarketStatusType::Error;
+                                    status.error = Some("Failed to parse response".to_string());
+                                }
+                            }
+                            Err(e) => {
+                                println!("Error fetching from SkillsMP: {}", e);
+                                status.status = MarketStatusType::Error;
+                                status.error = Some(e);
+                            }
+                        }
+                    }
+                }
+
+                (skills, total, status)
             });
-        }
+
+            // Wait for all threads to complete and collect results
+            let (claude_skills, claude_total, claude_status) = claude_handle.join().unwrap_or_else(|_| {
+                (Vec::new(), 0, MarketStatus {
+                    id: "claude-plugins".to_string(),
+                    name: "Claude Plugins".to_string(),
+                    status: MarketStatusType::Error,
+                    error: Some("Thread panicked".to_string()),
+                })
+            });
+
+            let (skillsllm_skills, skillsllm_total, skillsllm_status) = skillsllm_handle.join().unwrap_or_else(|_| {
+                (Vec::new(), 0, MarketStatus {
+                    id: "skillsllm".to_string(),
+                    name: "SkillsLLM".to_string(),
+                    status: MarketStatusType::Error,
+                    error: Some("Thread panicked".to_string()),
+                })
+            });
+
+            let (skillsmp_skills, skillsmp_total, skillsmp_status) = skillsmp_handle.join().unwrap_or_else(|_| {
+                (Vec::new(), 0, MarketStatus {
+                    id: "skillsmp".to_string(),
+                    name: "SkillsMP".to_string(),
+                    status: MarketStatusType::Error,
+                    error: Some("Thread panicked".to_string()),
+                })
+            });
+
+            // Merge results from all three marketplaces
+            let mut all_skills = Vec::new();
+            all_skills.extend(claude_skills);
+            all_skills.extend(skillsllm_skills);
+            all_skills.extend(skillsmp_skills);
+
+            let total_count = claude_total + skillsllm_total + skillsmp_total;
+
+            let market_statuses = vec![claude_status, skillsllm_status, skillsmp_status];
+
+            (all_skills, total_count, market_statuses)
+        });
+
+        let (skills, total, market_statuses) = results;
 
         Ok(RemoteSkillsViewResponse {
             skills,
@@ -396,7 +416,7 @@ pub async fn download_marketplace_skill(
     request: DownloadRequest,
 ) -> Result<DownloadResult, String> {
     if request.install_base_dir.trim().is_empty() {
-        return Err("安装目录不能为空".to_string());
+        return Err("Install directory cannot be empty".to_string());
     }
 
     let source_url = request.source_url.clone();
@@ -418,10 +438,10 @@ pub async fn download_marketplace_skill(
 #[tauri::command]
 pub async fn update_marketplace_skill(request: DownloadRequest) -> Result<DownloadResult, String> {
     if request.install_base_dir.trim().is_empty() {
-        return Err("安装目录不能为空".to_string());
+        return Err("Install directory cannot be empty".to_string());
     }
     if request.source_url.trim().is_empty() {
-        return Err("缺少有效的源码地址 (Source URL)，无法更新".to_string());
+        return Err("Missing valid source URL, cannot update".to_string());
     }
 
     let source_url = request.source_url.clone();

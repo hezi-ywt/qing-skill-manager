@@ -89,7 +89,7 @@ function handleLinkSkills(projectId: string) {
                {{ t("projects.cloneSkills") }}
             </button>
             <button
-              class="ghost danger small"
+              class="ghost danger btn-sm"
               @click="handleRemoveProject(project.id)"
             >
               {{ t("projects.remove") }}

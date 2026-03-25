@@ -5,6 +5,7 @@ export default {
       market: "Market",
       ide: "IDE 浏览",
       projects: "项目管理",
+      library: "技能库",
       settings: "设置"
     },
     header: {
@@ -421,5 +422,103 @@ export default {
     empty: "（空）",
     contentDiff: "内容差异",
     noChanges: "两个版本之间没有差异"
+  },
+  library: {
+    title: "技能库",
+    platformAll: "全部平台",
+    platformFilter: "平台筛选",
+    searchPlaceholder: "搜索技能...",
+    statusFilter: "状态筛选",
+    statusInstalled: "已安装",
+    statusNotInstalled: "未安装",
+    statusOutdated: "有更新",
+    statusConflict: "有冲突",
+    versionStack: "版本栈",
+    versionDefault: "默认版本",
+    versionActive: "当前激活",
+    versionCount: "{count} 个版本",
+    installedIn: "已安装到",
+    usedInProjects: "已在 {count} 个项目中使用",
+    notUsedInProjects: "尚未在任何项目中使用",
+    projectMappings: "项目使用情况",
+    mappingStatusSynced: "已同步",
+    mappingStatusModified: "已修改",
+    mappingStatusConflict: "有冲突",
+    mappingStatusMissing: "未安装",
+    actions: {
+      clone: "克隆",
+      install: "安装",
+      open: "打开",
+      manage: "管理",
+      update: "更新",
+      uninstall: "卸载",
+      viewDetails: "查看详情",
+      setDefault: "设为默认",
+      createVersion: "创建版本"
+    },
+    empty: {
+      noSkills: "库中暂无技能",
+      noResults: "没有匹配的技能",
+      selectSkill: "选择技能查看详情",
+      list: "暂无技能",
+      listNoResults: "无匹配结果"
+    },
+    details: {
+      title: "技能详情",
+      namespace: "命名空间",
+      source: "来源",
+      path: "本地路径",
+      description: "描述",
+      versions: "版本栈",
+      installations: "IDE 安装情况",
+      projects: "项目映射"
+    },
+    status: {
+      active: "激活",
+      linked: "已链接",
+      unused: "未使用"
+    },
+    refresh: "刷新",
+    import: "导入技能",
+    stats: "{count} / {total}",
+    loading: "加载中...",
+    linkedIdes: "{count} 个IDE",
+    cloneHint: "将技能克隆到已配置 IDE 目标的项目环境中。",
+    mappingEmptyVersion: "暂无匹配版本",
+    versionRailHint: "查看版本栈、对比快照并设置默认版本。",
+    detail: {
+      selectSkill: "选择技能",
+      selectSkillDesc: "从侧边栏选择一个技能以查看详情和管理版本。",
+      versionCount: "{count} 个版本",
+      openDir: "打开目录",
+      versions: "版本管理",
+      installToIde: "安装到IDE",
+      installing: "安装中",
+      installationStatus: "安装状态",
+      installed: "已安装",
+      currentVersionInfo: "当前版本信息",
+      versionId: "版本ID",
+      versionName: "名称",
+      created: "创建时间",
+      source: "来源",
+      path: "路径",
+      noDescription: "暂无描述"
+    },
+    versions: {
+      title: "版本列表",
+      create: "创建版本",
+      compare: "对比",
+      noSkill: "未选择技能",
+      loading: "加载版本中...",
+      empty: "暂无版本",
+      default: "默认",
+      active: "当前",
+      from: "源自",
+      setDefault: "设为默认"
+    },
+    variants: {
+      title: "变体",
+      version: "版本"
+    }
   }
 };

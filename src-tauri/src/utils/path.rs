@@ -67,18 +67,22 @@ pub fn sanitize_dir_name(name: &str) -> String {
             out.push('-');
         }
     }
+
+    // Collapse consecutive hyphens into a single hyphen
+    let collapsed = collapse_consecutive_hyphens(&out);
+
     #[cfg(target_os = "windows")]
-    let mut result = if out.is_empty() {
+    let mut result = if collapsed.is_empty() {
         "skill".to_string()
     } else {
-        out.trim_matches('-').to_string()
+        collapsed.trim_matches('-').to_string()
     };
 
     #[cfg(not(target_os = "windows"))]
-    let result = if out.is_empty() {
+    let result = if collapsed.is_empty() {
         "skill".to_string()
     } else {
-        out.trim_matches('-').to_string()
+        collapsed.trim_matches('-').to_string()
     };
 
     // Windows reserved names check - prefix with underscore to make it safe
@@ -87,6 +91,24 @@ pub fn sanitize_dir_name(name: &str) -> String {
         result = format!("_{}", result);
     }
 
+    result
+}
+
+/// Collapse consecutive hyphens into a single hyphen
+fn collapse_consecutive_hyphens(input: &str) -> String {
+    let mut result = String::with_capacity(input.len());
+    let mut prev_was_hyphen = false;
+    for ch in input.chars() {
+        if ch == '-' {
+            if !prev_was_hyphen {
+                result.push(ch);
+            }
+            prev_was_hyphen = true;
+        } else {
+            result.push(ch);
+            prev_was_hyphen = false;
+        }
+    }
     result
 }
 
@@ -166,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_sanitize_dir_name_mixed_whitespace() {
-        assert_eq!(sanitize_dir_name("my  skill   name"), "my--skill---name");
+        assert_eq!(sanitize_dir_name("my  skill   name"), "my-skill-name");
     }
 
     #[test]

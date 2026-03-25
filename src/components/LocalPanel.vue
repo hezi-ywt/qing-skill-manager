@@ -127,11 +127,13 @@ function deleteSelected() {
         <button class="ghost" :disabled="selectedSkills.length === 0 || localLoading" @click="installSelected">
           {{ t("local.installSelected", { count: selectedSkills.length }) }}
         </button>
-        <button class="ghost danger" :disabled="selectedSkills.length === 0 || localLoading" @click="deleteSelected">
+        <button class="ghost danger btn-sm" :disabled="selectedSkills.length === 0 || localLoading" @click="deleteSelected">
           {{ t("local.deleteSelected", { count: selectedSkills.length }) }}
         </button>
+      </div>
+      <div class="actions-secondary">
         <button
-          class="ghost danger"
+          class="btn-text"
           :disabled="localSkills.length === 0 || localLoading"
           @click="$emit('deleteLocal', localSkills)"
         >
@@ -184,7 +186,7 @@ function deleteSelected() {
             <button class="ghost" @click="$emit('openDir', skill.path)">
               {{ t("local.openDir") }}
             </button>
-            <button class="ghost danger" @click="$emit('deleteLocal', [skill])">
+            <button class="ghost danger btn-sm" @click="$emit('deleteLocal', [skill])">
               {{ t("local.deleteOne") }}
             </button>
           </div>
@@ -229,8 +231,14 @@ function deleteSelected() {
 .buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   margin-top: 12px;
+}
+
+.actions-secondary {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 6px;
 }
 
 .search-row {

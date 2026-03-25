@@ -64,7 +64,7 @@
 ```text
 qing-skill-manager/
 ├─ src/                 # Vue 前端源码
-│  ├─ components/       # 界面组件：Panel / Modal / Overlay
+│  ├─ components/       # 界面组件：Panel / Modal / Overlay / Library Workspace
 │  ├─ composables/      # 业务状态与逻辑封装
 │  ├─ locales/          # 国际化文案
 │  ├─ assets/           # 全局样式与静态资源
@@ -115,6 +115,12 @@ qing-skill-manager/
 - 汇总多个 composable 的状态与动作
 - 渲染所有 panel 与 modal
 
+在本轮前端重构后，`local` 标签页不再直接渲染旧的本地列表面板，而是挂载新的 **Library Workspace**，用于承载按布局草图适配后的三栏式技能库体验：
+
+- 左栏：技能搜索、技能切换、刷新与导入入口
+- 中栏：技能详情、路径/来源信息、安装状态、项目映射、批量操作与克隆入口
+- 右栏：版本栈、默认版本标记、版本对比与创建版本入口
+
 它不是一个“纯展示层”组件，而是一个**页面级 orchestration component**。
 
 如果你要快速理解应用怎么跑起来，第一步就是读：
@@ -157,11 +163,28 @@ Rust 侧入口分两层：
 
 组件大致分为三类。
 
-#### A. Panel：主标签页内容
+#### A. Panel / Workspace：主标签页内容
+
+- `library/LibraryWorkspace.vue`
+  - 新的技能库工作台容器
+  - 组合左侧列表、中间详情区、右侧版本轨
+  - 负责把 Local tab 重构为按布局草图适配后的主视图
+
+- `library/LibrarySidebar.vue`
+  - 展示技能列表、搜索框、刷新与导入操作
+  - 承载左侧导航式技能切换体验
+
+- `library/LibraryDetailPanel.vue`
+  - 展示技能描述、路径、来源、安装状态与主操作按钮
+  - 承载安装、打开目录、版本管理、删除等核心交互
+
+- `library/LibraryVersionRail.vue`
+  - 展示版本栈、默认版本标记、当前激活版本与变体信息
+  - 作为 Library 视图右侧版本检查轨
 
 - `LocalPanel.vue`
-  - 展示本地仓库中的 skills
-  - 支持安装、删除、打开目录、刷新、导入等操作
+  - 旧的本地技能面板实现仍可作为历史参考
+  - 当前主入口已经由 `LibraryWorkspace.vue` 接管
 
 - `MarketPanel.vue`
   - 搜索远程市场中的 skills
@@ -232,7 +255,28 @@ Rust 侧入口分两层：
 
 可以把它理解成“应用服务层 + 页面控制器”的结合体。
 
+在本轮重构后，它还会向 `App.vue` 暴露 Library 视图所需的派生状态，包括：
+
+- 当前选中的 Library skill
+- 搜索关键字与筛选状态
+- 平台过滤项
+- Library 列表与详情区需要的聚合数据
+
 如果你只读一个业务文件，就先读它。
+
+#### `useLibraryWorkspace.ts`
+
+这是为本轮 Library 工作台新增的前端视图模型层。
+
+它的职责是：
+
+- 从 `localSkills`、`ideSkills`、`projects`、`projectSkillSnapshots`、`currentSkillPackage` 派生出适合 UI 直接消费的数据
+- 生成平台过滤选项、技能列表、选中技能详情、版本摘要、项目映射等结构
+- 尽量复用现有业务层，而不是新增一套后端接口或数据源
+
+当前 Library 组件层已经消费其中的项目映射与使用情况数据，因此如果你要扩展项目侧展示，不必先改后端，优先检查这个 composable 是否已经有足够的派生结果。
+
+如果你要继续扩展当前的技能库布局与交互，优先从这个 composable 入手，而不是把派生逻辑继续堆回 `App.vue`。
 
 #### `useProjectConfig.ts`
 
@@ -292,6 +336,18 @@ Rust 侧入口分两层：
 - `App.vue` 中也保留了大量全局与 scoped 样式
 
 这说明样式目前是**集中在页面根组件 + 局部组件样式**的混合方式，而不是完整的 design system 或独立 theme module。
+
+在 Library 工作台重构后，样式层新增了一组围绕 Library 视图的深色主题变量，例如：
+
+- `--library-bg`
+- `--library-sidebar-bg`
+- `--library-surface`
+- `--library-border`
+- `--library-accent`
+
+这些变量主要服务于新版三栏布局、卡片、tag、版本轨等视觉元素。
+
+如果你要继续推进 Library 视图的样式统一，建议优先收敛这些变量，而不是在新组件里继续直接写死颜色值。
 
 ---
 
@@ -398,6 +454,19 @@ Vue 组件
 
 所以首次进入应用时，界面已经会自动做一轮初始化拉取和本地扫描。
 
+在新版 Library 视图中，初始化后的数据还会继续经过 `useLibraryWorkspace.ts` 做一次派生，形成：
+
+- 左栏技能列表
+- 当前选中的 skill 详情
+- 版本轨需要的版本摘要
+- 项目映射与安装状态信息
+
+因此，如果你看到 Library 界面显示异常，排查顺序建议是：
+
+1. `useLocalInventory` / `useVersionManagement` 是否产出正确原始数据
+2. `useProjectConfig` / `useProjectSnapshots` 是否拿到了项目关联信息
+3. `useLibraryWorkspace.ts` 的派生逻辑是否把数据正确转换给组件层
+
 ### 7.2 持久化策略
 
 项目当前前端侧主要使用 `localStorage` 保存用户配置。
@@ -451,6 +520,9 @@ Vue 组件
   "build": "vue-tsc --noEmit && vite build",
   "preview": "vite preview",
   "tauri": "tauri",
+  "typecheck": "vue-tsc --noEmit",
+  "build:verify": "vite build --mode production",
+  "check:project": "node \"scripts/check-project.js\"",
   "release": "node \"scripts/release.js\""
 }
 ```
@@ -460,6 +532,13 @@ Vue 组件
 ```bash
 pnpm install
 pnpm tauri dev
+```
+
+如果你只想验证前端改动（例如本次 Library 工作台重构），推荐最小验证命令为：
+
+```bash
+pnpm run typecheck
+pnpm run build
 ```
 
 ### 8.3 为什么是 `pnpm tauri dev`
@@ -542,8 +621,23 @@ xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
 
 - `src/App.vue`
 - 对应的 `src/components/*Panel.vue`
+- 如果是 Local / Library 视图，再看 `src/components/library/*`
 
 因为 tab 切换和 panel 装配都在 `App.vue`。
+
+如果你的目标是继续基于 `docs/library-ui-prototype-v2.html` 调整布局与信息架构，建议优先阅读：
+
+1. `src/components/library/LibraryWorkspace.vue`
+2. `src/components/library/LibrarySidebar.vue`
+3. `src/components/library/LibraryDetailPanel.vue`
+4. `src/components/library/LibraryVersionRail.vue`
+5. `src/composables/useLibraryWorkspace.ts`
+
+其中：
+
+- `LibrarySidebar.vue` 负责多选、筛选后的列表展示与选择密度控制
+- `LibraryDetailPanel.vue` 负责单 skill 详情、项目映射和克隆入口
+- `LibraryVersionRail.vue` 负责版本选择、默认版本设置与版本对比入口
 
 ### 9.2 改市场搜索 / 下载 / 更新逻辑
 

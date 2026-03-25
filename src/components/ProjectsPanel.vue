@@ -142,7 +142,7 @@ function getProjectSkillDetails(projectId: string) {
               {{ t("projects.cloneSkillsToProject") }}
             </button>
             <button
-              class="ghost danger small"
+              class="ghost danger btn-sm"
               @click="handleRemoveProject(project.id)"
             >
               {{ t("projects.remove") }}

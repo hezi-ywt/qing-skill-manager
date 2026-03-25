@@ -5,6 +5,7 @@ export default {
       market: "Market",
       ide: "IDE Browser",
       projects: "Projects",
+      library: "Library",
       settings: "Settings"
     },
     header: {
@@ -421,5 +422,103 @@ export default {
     empty: "(empty)",
     contentDiff: "Content Diff",
     noChanges: "No changes detected between these versions"
+  },
+  library: {
+    title: "Library",
+    platformAll: "All Platforms",
+    platformFilter: "Platform",
+    searchPlaceholder: "Search skills...",
+    statusFilter: "Status",
+    statusInstalled: "Installed",
+    statusNotInstalled: "Not Installed",
+    statusOutdated: "Outdated",
+    statusConflict: "Conflict",
+    versionStack: "Versions",
+    versionDefault: "Default",
+    versionActive: "Active",
+    versionCount: "{count} versions",
+    installedIn: "Installed in",
+    usedInProjects: "Used in {count} projects",
+    notUsedInProjects: "Not used in any projects",
+    projectMappings: "Project Usage",
+    mappingStatusSynced: "Synced",
+    mappingStatusModified: "Modified",
+    mappingStatusConflict: "Conflict",
+    mappingStatusMissing: "Not installed",
+    actions: {
+      clone: "Clone",
+      install: "Install",
+      open: "Open",
+      manage: "Manage",
+      update: "Update",
+      uninstall: "Uninstall",
+      viewDetails: "View Details",
+      setDefault: "Set as Default",
+      createVersion: "Create Version"
+    },
+    empty: {
+      noSkills: "No skills in library",
+      noResults: "No skills match your filters",
+      selectSkill: "Select a skill to view details",
+      list: "No skills",
+      listNoResults: "No matching skills"
+    },
+    details: {
+      title: "Skill Details",
+      namespace: "Namespace",
+      source: "Source",
+      path: "Local Path",
+      description: "Description",
+      versions: "Version Stack",
+      installations: "IDE Installations",
+      projects: "Project Mappings"
+    },
+    status: {
+      active: "Active",
+      linked: "Linked",
+      unused: "Unused"
+    },
+    refresh: "Refresh",
+    import: "Import Skill",
+    stats: "{count} of {total}",
+    loading: "Loading...",
+    linkedIdes: "{count} IDEs",
+    cloneHint: "Clone skills into project environments that already have IDE targets configured.",
+    mappingEmptyVersion: "No matched version",
+    versionRailHint: "Review the version stack, compare snapshots, and mark a default version.",
+    detail: {
+      selectSkill: "Select a Skill",
+      selectSkillDesc: "Choose a skill from the sidebar to view its details and manage versions.",
+      versionCount: "{count} versions",
+      openDir: "Open Directory",
+      versions: "Versions",
+      installToIde: "Install to IDE",
+      installing: "Installing",
+      installationStatus: "Installation Status",
+      installed: "Installed",
+      currentVersionInfo: "Current Version Info",
+      versionId: "Version ID",
+      versionName: "Name",
+      created: "Created",
+      source: "Source",
+      path: "Path",
+      noDescription: "No description available"
+    },
+    versions: {
+      title: "Versions",
+      create: "Create Version",
+      compare: "Compare",
+      noSkill: "No skill selected",
+      loading: "Loading versions...",
+      empty: "No versions yet",
+      default: "Default",
+      active: "Active",
+      from: "from",
+      setDefault: "Set as default"
+    },
+    variants: {
+      title: "Variants",
+      version: "Version"
+    }
   }
 };

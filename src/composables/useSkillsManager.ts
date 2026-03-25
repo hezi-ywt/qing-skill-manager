@@ -11,12 +11,15 @@ import { useUninstallActions } from "./useUninstallActions";
 import { useIdeAdoption } from "./useIdeAdoption";
 import { useProjectScan } from "./useProjectScan";
 import { useVersionManagement } from "./useVersionManagement";
+import { useLibraryWorkspace } from "./useLibraryWorkspace";
+import { useProjectConfig } from "./useProjectConfig";
+import { useProjectSnapshots } from "./useProjectSnapshots";
 
 export function useSkillsManager() {
   const { t } = useI18n();
   const toast = useToast();
 
-  const activeTab = ref<"local" | "market" | "ide" | "projects" | "settings">("local");
+  const activeTab = ref<"local" | "market" | "ide" | "projects" | "settings" | "library">("local");
   const updatingId = ref<string | null>(null);
   const inventoryBusy = ref(false);
   const inventoryBusyText = ref("");
@@ -140,6 +143,48 @@ export function useSkillsManager() {
     openVersionDiffModal,
     closeVersionDiffModal
   } = useVersionManagement((msg) => toast.success(msg), (msg) => toast.error(msg), scanLocalSkills, t);
+
+  const {
+    projects,
+    selectedProjectId,
+    loadProjects,
+    addProject,
+    removeProject,
+    updateProjectIdeTargets,
+    updateDetectedIdeDirs,
+    getProjectLinkTargets
+  } = useProjectConfig();
+
+  const {
+    projectSkillSnapshots,
+    refreshProjectSkillSnapshots,
+    restartProjectSnapshotRefreshLoop
+  } = useProjectSnapshots({ projects, scanProjectSkills });
+
+  const {
+    platformFilter,
+    searchQuery: librarySearchQuery,
+    statusFilter,
+    selectedSkillId: selectedLibrarySkillId,
+    loading: libraryLoading,
+    platformOptions,
+    librarySkills,
+    filteredSkills,
+    selectedSkill: selectedLibrarySkill,
+    selectSkill,
+    setPlatformFilter,
+    setSearchQuery: setLibrarySearchQuery,
+    setStatusFilter,
+    clearFilters
+  } = useLibraryWorkspace({
+    localSkills,
+    ideSkills,
+    projects,
+    ideOptions,
+    projectSkillSnapshots,
+    currentSkillPackage,
+    t
+  });
 
   const filteredIdeSkills = computed(() =>
     ideSkills.value.filter((skill) => skill.ide === selectedIdeFilter.value)
@@ -275,6 +320,31 @@ export function useSkillsManager() {
     openVersionManagerModal,
     closeVersionManagerModal,
     openVersionDiffModal,
-    closeVersionDiffModal
+    closeVersionDiffModal,
+    projects,
+    selectedProjectId,
+    loadProjects,
+    addProject,
+    removeProject,
+    updateProjectIdeTargets,
+    updateDetectedIdeDirs,
+    getProjectLinkTargets,
+    projectSkillSnapshots,
+    refreshProjectSkillSnapshots,
+    restartProjectSnapshotRefreshLoop,
+    platformFilter,
+    librarySearchQuery,
+    statusFilter,
+    selectedLibrarySkillId,
+    libraryLoading,
+    platformOptions,
+    librarySkills,
+    filteredSkills,
+    selectedLibrarySkill,
+    selectSkill,
+    setPlatformFilter,
+    setLibrarySearchQuery,
+    setStatusFilter,
+    clearFilters
   };
 }

@@ -36,11 +36,11 @@ pub fn download_skill_to_dir(
     install_base_dir: &Path,
     overwrite: bool,
 ) -> Result<PathBuf, String> {
-    let home = dirs::home_dir().ok_or("无法获取用户目录")?;
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
     let allowed_base = normalize_path(&home.join(".qing-skill-manager/skills"));
     let requested_base = normalize_path(install_base_dir);
     if !requested_base.starts_with(&allowed_base) {
-        return Err("安装目录不在允许范围内".to_string());
+        return Err("Install directory is outside the allowed scope".to_string());
     }
 
     fs::create_dir_all(install_base_dir).map_err(|err| err.to_string())?;
@@ -51,7 +51,7 @@ pub fn download_skill_to_dir(
         if overwrite {
             fs::remove_dir_all(&target_dir).map_err(|err| err.to_string())?;
         } else {
-            return Err("目标目录已存在，请更换名称或先清理".to_string());
+            return Err("Target directory already exists, please rename or clean up first".to_string());
         }
     }
 
@@ -171,7 +171,7 @@ pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         let file_type = entry.file_type();
         if file_type.is_symlink() {
             return Err(format!(
-                "检测到链接型目录项，已拒绝复制: {}",
+                "Symlink detected, copy rejected: {}",
                 entry.path().display()
             ));
         }

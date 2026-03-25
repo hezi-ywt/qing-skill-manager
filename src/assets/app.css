@@ -400,9 +400,46 @@ body {
 }
 
 .ghost.danger {
+  border-color: transparent;
+  color: var(--color-muted);
+  background: transparent;
+}
+
+.ghost.danger:hover:not(:disabled) {
   border-color: var(--color-error-border);
   color: var(--color-error-text);
   background: var(--color-error-bg);
+}
+
+.ghost.danger-fill {
+  border-color: var(--color-error-border);
+  color: var(--color-error-text);
+  background: var(--color-error-bg);
+}
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.btn-text {
+  border: none;
+  background: transparent;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--color-muted);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.btn-text:hover:not(:disabled) {
+  color: var(--color-error-text);
+  background: var(--color-error-bg);
+}
+
+.btn-text:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .more {

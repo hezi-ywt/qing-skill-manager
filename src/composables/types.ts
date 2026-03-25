@@ -409,3 +409,107 @@ export type RenameVersionResponse = {
   success: boolean;
   version: SkillVersion;
 };
+
+// ============================================================================
+// Library Workspace Types - View Model for Unified Library UI
+// ============================================================================
+
+/**
+ * Platform/IDE filter option for Library view
+ */
+export type PlatformFilterOption = {
+  id: string;
+  label: string;
+  icon?: string;
+  count: number;
+  active: boolean;
+};
+
+/**
+ * Library skill status derived from version and installation state
+ */
+export type LibrarySkillStatus =
+  | "installed"      // Installed in at least one IDE
+  | "not-installed"  // Only in local repo, not installed anywhere
+  | "outdated"       // Has update available
+  | "conflict";      // Has version conflicts
+
+/**
+ * Version summary for Library version stack display
+ */
+export type LibraryVersionSummary = {
+  id: string;
+  version: string;
+  displayName: string;
+  createdAt: number;
+  isDefault: boolean;
+  isActive: boolean;
+  source: SkillVersionSource;
+  projectCount: number;
+  ideCount: number;
+};
+
+/**
+ * Project mapping entry showing which version is used in a project
+ */
+export type LibraryProjectMapping = {
+  projectId: string;
+  projectName: string;
+  projectPath: string;
+  versionId: string | null;
+  versionName: string | null;
+  isDefaultVersion: boolean;
+  ideTargets: string[];
+  status: "synced" | "modified" | "conflict" | "missing";
+};
+
+/**
+ * IDE installation entry for a skill
+ */
+export type LibraryIdeInstallation = {
+  ideId: string;
+  ideLabel: string;
+  skillPath: string;
+  versionId: string | null;
+  isManaged: boolean;
+};
+
+/**
+ * Rich Library skill view combining local, version, and installation data
+ */
+export type LibrarySkill = {
+  id: string;
+  name: string;
+  namespace?: string;
+  description: string;
+  source: string;
+  path: string;
+  status: LibrarySkillStatus;
+  versionCount: number;
+  defaultVersion: LibraryVersionSummary | null;
+  versions: LibraryVersionSummary[];
+  installations: LibraryIdeInstallation[];
+  projectMappings: LibraryProjectMapping[];
+  usedByProjectIds: string[];
+};
+
+/**
+ * Library workspace state and computed data
+ */
+export type LibraryWorkspaceState = {
+  // Filter state
+  platformFilter: string | null;
+  searchQuery: string;
+  statusFilter: LibrarySkillStatus | null;
+
+  // Selection state
+  selectedSkillId: string | null;
+
+  // Computed data
+  platformOptions: PlatformFilterOption[];
+  filteredSkills: LibrarySkill[];
+  selectedSkill: LibrarySkill | null;
+
+  // Loading states
+  loading: boolean;
+};
