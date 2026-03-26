@@ -324,20 +324,25 @@ export function useLibraryWorkspace(options: UseLibraryWorkspaceOptions) {
     allIdeOptions: Array<{ id: string; label: string }>
   ): LibraryIdeInstallation[] {
     const installations: LibraryIdeInstallation[] = [];
+    const seen = new Set<string>();
 
     for (const ideSkill of allIdeSkills) {
-      if (ideSkill.name === localSkill.name) {
-        const ideOption = allIdeOptions.find((opt) => opt.id === ideSkill.ide);
-        installations.push({
-          ideId: ideSkill.ide,
-          ideLabel: ideOption?.label || ideSkill.ide,
-          skillPath: ideSkill.path,
-          versionId: ideSkill.versionId,
-          isManaged: ideSkill.managed,
-          scope: ideSkill.scope,
-          syncStatus: ideSkill.syncStatus
-        });
-      }
+      if (ideSkill.name !== localSkill.name) continue;
+      // Dedup by ide+scope+path to avoid duplicate entries
+      const key = `${ideSkill.ide}_${ideSkill.scope}_${ideSkill.path}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const ideOption = allIdeOptions.find((opt) => opt.id === ideSkill.ide);
+      installations.push({
+        ideId: ideSkill.ide,
+        ideLabel: ideOption?.label || ideSkill.ide,
+        skillPath: ideSkill.path,
+        versionId: ideSkill.versionId,
+        isManaged: ideSkill.managed,
+        scope: ideSkill.scope,
+        syncStatus: ideSkill.syncStatus
+      });
     }
 
     return installations;
