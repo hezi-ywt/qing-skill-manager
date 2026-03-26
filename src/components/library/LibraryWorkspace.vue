@@ -210,6 +210,17 @@ watch(
     selectedIds.value = selectedIds.value.filter((id) => availableIds.has(id));
 
     if (selectedSkillId.value && !availableIds.has(selectedSkillId.value)) {
+      // If old selection was unmanaged, try to find the managed version with same name
+      if (selectedSkillId.value.startsWith("unmanaged_")) {
+        const oldSkill = props.librarySkills.find((s) => s.id === selectedSkillId.value);
+        if (oldSkill) {
+          const managed = skills.find((s) => s.name === oldSkill.name && !s.id.startsWith("unmanaged_"));
+          if (managed) {
+            selectedSkillId.value = managed.id;
+            return;
+          }
+        }
+      }
       selectedSkillId.value = null;
     }
 
