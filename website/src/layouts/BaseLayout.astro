@@ -12,7 +12,7 @@ interface Props {
 
 const {
   title,
-  description = 'Qing Skill Manager - Multi-IDE Skills 管理器，支持 Market 下载与本地安装。基于原项目 skills-manager 重新包装。',
+  description = 'Qing Skill Manager — Discover, manage, and distribute AI skills across multiple IDEs and projects.',
   lang = 'zh',
   ogImage = '/og.png',
 } = Astro.props
@@ -70,7 +70,7 @@ const ogImageUrl = (() => {
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
 
@@ -101,9 +101,8 @@ const ogImageUrl = (() => {
       })();
     </script>
   </head>
-  <body class="min-h-screen bg-background text-foreground antialiased relative selection:bg-primary/30 selection:text-primary">
-    <div class="fixed inset-0 z-0 h-full w-full bg-[radial-gradient(circle_at_top,rgba(225,29,72,0.12),transparent_55%),radial-gradient(circle_at_20%_60%,rgba(249,115,22,0.08),transparent_50%)] pointer-events-none"></div>
-    <div class="fixed inset-0 z-0 h-full w-full bg-[linear-gradient(to_bottom,rgba(255,255,255,0.6),transparent_40%)] dark:bg-[linear-gradient(to_bottom,rgba(24,8,20,0.8),transparent_40%)] pointer-events-none"></div>
+  <body class="min-h-screen bg-background text-foreground antialiased relative selection:bg-primary/20 selection:text-foreground">
+    <div class="fixed inset-0 z-0 h-full w-full bg-[radial-gradient(ellipse_at_top,rgba(30,31,36,0.04),transparent_60%),radial-gradient(circle_at_80%_50%,rgba(107,111,122,0.03),transparent_50%)] dark:bg-[radial-gradient(ellipse_at_top,rgba(233,236,241,0.03),transparent_60%)] pointer-events-none"></div>
     <slot />
   </body>
 </html>
