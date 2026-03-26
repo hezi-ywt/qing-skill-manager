@@ -199,17 +199,21 @@ async function handleConflictResolution(resolution: "keep" | "overwrite" | "coex
 async function handleRegisterVersion(sourcePath: string) {
   if (!currentSkillPackage.value) return;
   const pkg = currentSkillPackage.value;
-  // Increment patch version from latest: 1.0.0 → 1.0.1 → 1.0.2
-  const latest = pkg.versions[0]?.version || "1.0.0";
+
+  // Use only active versions for numbering
+  const activeVersions = pkg.versions.filter((v) => v.isActive);
+  const latest = activeVersions[0]?.version || "1.0.0";
   const parts = latest.split(".");
   const patch = parseInt(parts[2] || "0", 10) + 1;
+  // Add timestamp suffix to avoid collision with soft-deleted versions that share the same hash
   const nextVersion = `${parts[0] || "1"}.${parts[1] || "0"}.${patch}`;
+  const uniqueLabel = `${nextVersion}-${Date.now().toString(36).slice(-4)}`;
   try {
     await createVersion({
       skillId: pkg.id,
       sourcePath,
       displayName: nextVersion,
-      version: nextVersion,
+      version: uniqueLabel,
       source: "import",
     });
   } catch (err) {
