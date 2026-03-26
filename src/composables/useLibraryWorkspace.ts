@@ -108,7 +108,7 @@ export function useLibraryWorkspace(options: UseLibraryWorkspaceOptions) {
         source: localSkill.source,
         path: localSkill.path,
         status,
-        versionCount: localSkill.versionCount,
+        versionCount: versions.filter((v) => v.isActive).length || localSkill.versionCount,
         defaultVersion: versions.find((v) => v.isDefault) || versions[0] || null,
         versions,
         installations,
