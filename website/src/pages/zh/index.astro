@@ -21,7 +21,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
       <div class="flex items-center gap-2">
         <a href="#features" class="hidden sm:inline-block px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">功能</a>
         <a href="#screenshots" class="hidden sm:inline-block px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">截图</a>
-        <a href="#quickstart" class="hidden sm:inline-block px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">快速开始</a>
+        <a href="#download" class="hidden sm:inline-block px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">下载</a>
         <LanguageSwitch lang="zh" />
         <ThemeToggle />
       </div>
@@ -34,7 +34,7 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
       <div class="max-w-4xl mx-auto text-center">
         <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-accent text-foreground text-sm font-medium mb-8 border border-border">
           <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          v0.3.22 &mdash; 开源项目
+          v0.3.23 &mdash; 开源项目
         </div>
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight mb-6">
           每个项目，每个 IDE<br />
@@ -45,20 +45,20 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
         </p>
         <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
           <a
+            href="#download"
+            class="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary/10 text-base"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            下载
+          </a>
+          <a
             href="https://github.com/qing-claw/qing-skill-manager"
             target="_blank"
             rel="noopener"
-            class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity shadow-lg shadow-primary/10"
-          >
-            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-            在 GitHub 上查看
-          </a>
-          <a
-            href="#quickstart"
             class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-secondary text-secondary-foreground font-semibold hover:bg-secondary/80 transition-colors border border-border"
           >
-            快速开始
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            GitHub
           </a>
         </div>
 
@@ -262,44 +262,90 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
       </div>
     </section>
 
-    <!-- ========== QUICK START ========== -->
-    <section id="quickstart" class="py-20 px-6">
+    <!-- ========== DOWNLOAD ========== -->
+    <section id="download" class="py-20 px-6">
       <div class="max-w-3xl mx-auto">
         <div class="text-center mb-12">
-          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4">快速开始</h2>
-          <p class="text-muted-foreground text-lg">三条命令即可从源码构建。</p>
+          <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4">下载</h2>
+          <p class="text-muted-foreground text-lg">获取最新版本，立即开始管理你的技能。</p>
         </div>
 
-        <div class="space-y-6">
-          <div>
-            <h3 class="font-semibold mb-3">环境要求</h3>
-            <div class="flex flex-wrap gap-3 text-sm">
-              <span class="px-3 py-1 rounded-full bg-secondary border border-border/50">Node.js (LTS)</span>
-              <span class="px-3 py-1 rounded-full bg-secondary border border-border/50">Rust (rustup)</span>
-              <span class="px-3 py-1 rounded-full bg-secondary border border-border/50">pnpm</span>
+        <div class="space-y-4">
+          <!-- macOS -->
+          <div class="p-5 rounded-xl bg-card/50 border border-border/50 backdrop-blur-sm flex items-center justify-between gap-4 flex-wrap">
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-lg bg-accent flex items-center justify-center">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+              </div>
+              <div>
+                <p class="font-semibold">macOS (Apple Silicon)</p>
+                <p class="text-sm text-muted-foreground">.dmg &mdash; v0.3.23</p>
+              </div>
             </div>
+            <a
+              href="https://github.com/qing-claw/qing-skill-manager/releases/latest/download/qing-skill-manager_0.3.23_aarch64.dmg"
+              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              下载 .dmg
+            </a>
           </div>
 
-          <div class="rounded-xl bg-[#1e1e2e] text-[#cdd6f4] p-6 font-mono text-sm leading-relaxed overflow-x-auto shadow-xl">
-            <div class="flex items-center gap-2 mb-4 text-[#6c7086]">
-              <span class="w-3 h-3 rounded-full bg-[#f38ba8]"></span>
-              <span class="w-3 h-3 rounded-full bg-[#a6e3a1]"></span>
-              <span class="w-3 h-3 rounded-full bg-[#f9e2af]"></span>
-              <span class="ml-2 text-xs">Terminal</span>
+          <!-- Windows / Linux -->
+          <div class="p-5 rounded-xl bg-card/50 border border-border/50 backdrop-blur-sm flex items-center justify-between gap-4 flex-wrap opacity-60">
+            <div class="flex items-center gap-4">
+              <div class="w-10 h-10 rounded-lg bg-accent flex items-center justify-center">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+              </div>
+              <div>
+                <p class="font-semibold">Windows / Linux</p>
+                <p class="text-sm text-muted-foreground">即将推出 &mdash; 或从源码构建</p>
+              </div>
             </div>
-            <pre class="whitespace-pre"><code><span class="text-[#a6e3a1]">$</span> git clone https://github.com/qing-claw/qing-skill-manager.git
+            <span class="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm font-medium">即将推出</span>
+          </div>
+
+          <!-- All releases -->
+          <div class="text-center pt-2">
+            <a
+              href="https://github.com/qing-claw/qing-skill-manager/releases"
+              target="_blank"
+              rel="noopener"
+              class="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              在 GitHub 查看所有版本 &rarr;
+            </a>
+          </div>
+        </div>
+
+        <!-- macOS security note -->
+        <div class="mt-8 p-4 rounded-xl bg-accent/30 border border-accent/50 text-sm">
+          <p class="font-semibold mb-1">macOS 安全提示</p>
+          <p class="text-muted-foreground">应用尚未进行代码签名。首次启动时 macOS 可能会拦截。在终端执行以下命令即可放行：</p>
+          <code class="block mt-2 bg-muted px-3 py-2 rounded text-xs font-mono">xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"</code>
+        </div>
+
+        <!-- Developer: build from source -->
+        <details class="mt-8 rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+          <summary class="px-5 py-4 cursor-pointer font-semibold text-sm hover:bg-muted/30 transition-colors select-none flex items-center gap-2">
+            <svg class="w-4 h-4 text-muted-foreground transition-transform details-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            开发者：从源码构建
+          </summary>
+          <div class="px-5 pb-5 space-y-4">
+            <div class="flex flex-wrap gap-2 text-xs">
+              <span class="px-2.5 py-1 rounded-full bg-secondary border border-border/50">Node.js (LTS)</span>
+              <span class="px-2.5 py-1 rounded-full bg-secondary border border-border/50">Rust (rustup)</span>
+              <span class="px-2.5 py-1 rounded-full bg-secondary border border-border/50">pnpm</span>
+            </div>
+            <div class="rounded-lg bg-[#1e1e2e] text-[#cdd6f4] p-4 font-mono text-sm leading-relaxed overflow-x-auto">
+              <pre class="whitespace-pre"><code><span class="text-[#a6e3a1]">$</span> git clone https://github.com/qing-claw/qing-skill-manager.git
 <span class="text-[#a6e3a1]">$</span> cd qing-skill-manager/skills-manager
 <span class="text-[#a6e3a1]">$</span> pnpm install
-<span class="text-[#a6e3a1]">$</span> pnpm tauri dev     <span class="text-[#6c7086]"># 启动开发环境</span>
-
-<span class="text-[#a6e3a1]">$</span> pnpm tauri build   <span class="text-[#6c7086]"># 构建桌面应用</span></code></pre>
+<span class="text-[#a6e3a1]">$</span> pnpm tauri dev     <span class="text-[#6c7086]"># 开发模式</span>
+<span class="text-[#a6e3a1]">$</span> pnpm tauri build   <span class="text-[#6c7086]"># 生产构建</span></code></pre>
+            </div>
           </div>
-
-          <div class="p-4 rounded-xl bg-accent/30 border border-accent/50 text-sm">
-            <p class="font-semibold mb-1">macOS 提示</p>
-            <p class="text-muted-foreground">首次启动可能出现安全警告。执行 <code class="bg-muted px-1.5 py-0.5 rounded text-xs">xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"</code> 即可放行。</p>
-          </div>
-        </div>
+        </details>
       </div>
     </section>
 
