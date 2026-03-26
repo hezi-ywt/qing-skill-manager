@@ -57,14 +57,7 @@ function getSyncLabel(status: string): string {
   return t("library.syncUnknown");
 }
 
-function getVersionName(versionId: string | null): string {
-  if (!versionId || !props.librarySkill) return "";
-  const vs = props.librarySkill.versions.find((v) => v.id === versionId);
-  if (vs) return vs.displayName;
-  // Fallback: extract version part before the hash suffix (e.g., "1.0.0_abc12345" → "1.0.0")
-  const underscoreIdx = versionId.lastIndexOf("_");
-  return underscoreIdx > 0 ? versionId.substring(0, underscoreIdx) : versionId;
-}
+
 
 const cloneProjects = computed(() => {
   if (!props.projects.length) {
@@ -190,7 +183,6 @@ function getMappingDescription(status: string): string {
           <div v-for="inst in globalInstallations" :key="inst.skillPath" class="install-entry">
             <div class="install-info">
               <span class="install-ide">{{ inst.ideLabel }}</span>
-              <span v-if="inst.versionId" class="version-meta-text">{{ getVersionName(inst.versionId) }}</span>
               <span class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
             </div>
             <div class="install-actions">
@@ -240,7 +232,7 @@ function getMappingDescription(status: string): string {
             </div>
           </article>
         </div>
-        <div v-if="cloneProjects.some((p) => !p.mapped)" class="clone-grid">
+        <div v-if="!selectedVersionId && cloneProjects.some((p) => !p.mapped)" class="clone-grid">
           <button v-for="project in cloneProjects.filter((p) => !p.mapped)" :key="project.id" class="ghost clone-button" @click="$emit('cloneToProject', project.id)">
             <span>{{ t("library.actions.clone") }} · {{ project.name }}</span>
             <span class="hint">{{ project.ideTargets.join(", ") || t("projects.emptyHint") }}</span>

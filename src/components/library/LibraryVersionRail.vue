@@ -132,6 +132,21 @@ const detectedVersions = computed(() => {
 
     <div v-if="!skill" class="empty-state hint">{{ t("library.versions.noSkill") }}</div>
     <div v-else-if="loading" class="empty-state hint">{{ t("library.versions.loading") }}</div>
+    <div v-else-if="sortedVersions.length === 0 && librarySkill && !librarySkill.inRepo" class="unmanaged-sources">
+      <div class="detected-header">{{ t("library.versions.sources") }}</div>
+      <article v-for="src in librarySkill.unmanagedSources" :key="src.path" class="card version-card detected">
+        <div class="version-main">
+          <div class="version-header">
+            <div class="card-title"><span class="repo-dot not-in-repo">○</span> {{ src.ide }}</div>
+            <span class="badge muted">{{ src.scope === "global" ? t("ide.scopeGlobal") : t("ide.scopeProject") }}</span>
+          </div>
+          <div class="card-meta">{{ src.path }}</div>
+        </div>
+        <div class="version-actions">
+          <button class="ghost action-btn" @click="emit('registerVersion', src.path)">{{ t("library.adoptToRepo") }}</button>
+        </div>
+      </article>
+    </div>
     <div v-else-if="sortedVersions.length === 0" class="empty-state hint">{{ t("library.versions.empty") }}</div>
 
     <div v-else class="versions-list">

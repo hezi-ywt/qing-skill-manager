@@ -549,6 +549,7 @@ export default {
       setDefault: "设为默认",
       rename: "重命名",
       delete: "删除",
+      sources: "来源位置",
       detected: "检测到的未注册版本",
       register: "注册为版本"
     },

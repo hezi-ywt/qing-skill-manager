@@ -549,6 +549,7 @@ export default {
       setDefault: "Set as default",
       rename: "Rename",
       delete: "Delete",
+      sources: "Source Locations",
       detected: "Detected Unregistered Versions",
       register: "Register as Version"
     },
