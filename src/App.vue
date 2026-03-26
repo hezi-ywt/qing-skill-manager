@@ -196,23 +196,16 @@ async function handleConflictResolution(resolution: "keep" | "overwrite" | "coex
   await handleConflictResolutionRaw(currentConflictSkill.value, resolution, coexistName);
 }
 
-async function handleRegisterVersion(sourcePath: string) {
+async function handleRegisterVersion(sourcePath: string, displayName: string, version: string) {
   if (!currentSkillPackage.value) return;
   const pkg = currentSkillPackage.value;
-
-  // Use only active versions for numbering
-  const activeVersions = pkg.versions.filter((v) => v.isActive);
-  const latest = activeVersions[0]?.version || "1.0.0";
-  const parts = latest.split(".");
-  const patch = parseInt(parts[2] || "0", 10) + 1;
-  // Add timestamp suffix to avoid collision with soft-deleted versions that share the same hash
-  const nextVersion = `${parts[0] || "1"}.${parts[1] || "0"}.${patch}`;
-  const uniqueLabel = `${nextVersion}-${Date.now().toString(36).slice(-4)}`;
+  // Add timestamp suffix to version to avoid ID collision with soft-deleted versions
+  const uniqueLabel = `${version}-${Date.now().toString(36).slice(-4)}`;
   try {
     await createVersion({
       skillId: pkg.id,
       sourcePath,
-      displayName: nextVersion,
+      displayName,
       version: uniqueLabel,
       source: "import",
     });

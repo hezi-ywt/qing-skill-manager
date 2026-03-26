@@ -18,7 +18,7 @@ const emit = defineEmits<{
   (e: "compareVersions", versionId: string): void;
   (e: "createVersion"): void;
   (e: "setDefault", versionId: string): void;
-  (e: "registerVersion", sourcePath: string): void;
+  (e: "registerVersion", sourcePath: string, displayName: string, version: string): void;
   (e: "renameVersion", versionId: string, newName: string): void;
   (e: "deleteVersion", versionId: string): void;
   (e: "adoptToRepo", path: string): void;
@@ -26,6 +26,34 @@ const emit = defineEmits<{
 
 const editingVersionId = ref<string | null>(null);
 const editingName = ref("");
+
+// Register form state
+const registeringPath = ref<string | null>(null);
+const registerName = ref("");
+const registerVersion = ref("");
+
+function startRegister(sourcePath: string): void {
+  registeringPath.value = sourcePath;
+  registerName.value = "";
+  registerVersion.value = "";
+  // Auto-suggest next version
+  const active = sortedVersions.value;
+  const latest = active[0]?.version || "1.0.0";
+  const parts = latest.split(".");
+  const patch = parseInt(parts[2] || "0", 10) + 1;
+  registerVersion.value = `${parts[0] || "1"}.${parts[1] || "0"}.${patch}`;
+  registerName.value = registerVersion.value;
+}
+
+function confirmRegister(): void {
+  if (!registeringPath.value || !registerName.value.trim()) return;
+  emit("registerVersion", registeringPath.value, registerName.value.trim(), registerVersion.value.trim() || registerName.value.trim());
+  registeringPath.value = null;
+}
+
+function cancelRegister(): void {
+  registeringPath.value = null;
+}
 
 function startRename(version: SkillVersion): void {
   editingVersionId.value = version.id;
@@ -246,7 +274,7 @@ const groupedUnmanagedSources = computed(() => {
 
       <!-- Unregistered versions (modified/conflicted copies) -->
       <article v-for="dv in detectedVersions" :key="dv.id" class="card version-card detected">
-        <button class="version-main" @click="emit('registerVersion', dv.path)">
+        <button class="version-main" @click="startRegister(dv.path)">
           <div class="version-header">
             <div class="card-title"><span class="repo-dot not-in-repo">○</span> {{ dv.label }}</div>
             <span class="badge muted">{{ t("library.status.unmanaged") }}</span>
@@ -254,9 +282,26 @@ const groupedUnmanagedSources = computed(() => {
           <div class="card-meta">{{ dv.path }}</div>
         </button>
         <div class="version-actions">
-          <button class="ghost action-btn" @click="emit('registerVersion', dv.path)">{{ t("library.versions.register") }}</button>
+          <button class="ghost action-btn" @click="startRegister(dv.path)">{{ t("library.versions.register") }}</button>
         </div>
       </article>
+    </div>
+
+    <!-- Register version form -->
+    <div v-if="registeringPath" class="register-form card">
+      <div class="panel-title" style="font-size:13px;margin-bottom:8px">{{ t("library.versions.registerForm") }}</div>
+      <div class="register-field">
+        <label class="register-label">{{ t("library.versions.registerName") }}</label>
+        <input v-model="registerName" class="rename-input" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+      </div>
+      <div class="register-field">
+        <label class="register-label">{{ t("library.versions.registerVersion") }}</label>
+        <input v-model="registerVersion" class="rename-input" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+      </div>
+      <div class="version-actions">
+        <button class="primary action-btn" @click="confirmRegister">{{ t("library.versions.registerConfirm") }}</button>
+        <button class="ghost action-btn" @click="cancelRegister">{{ t("common.cancel") }}</button>
+      </div>
     </div>
   </aside>
 </template>
@@ -454,6 +499,22 @@ const groupedUnmanagedSources = computed(() => {
 
 .rename-inline {
   flex: 1;
+}
+
+.register-form {
+  margin-top: 12px;
+  padding: 12px;
+}
+
+.register-field {
+  margin-bottom: 8px;
+}
+
+.register-label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-bottom: 4px;
 }
 
 .rename-input {

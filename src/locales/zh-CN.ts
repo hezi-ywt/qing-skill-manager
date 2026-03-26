@@ -554,7 +554,11 @@ export default {
       location: "个位置",
       locations: "个位置",
       detected: "检测到的未注册版本",
-      register: "注册为版本"
+      register: "注册为版本",
+      registerForm: "注册新版本",
+      registerName: "版本名称",
+      registerVersion: "版本号",
+      registerConfirm: "确认注册"
     },
     variants: {
       title: "变体",

@@ -49,7 +49,7 @@ const emit = defineEmits<{
   (e: "selectSkill", skill: LocalSkill): void;
   (e: "adoptToRepo", path: string): void;
   (e: "adoptManyToRepo", paths: string[]): void;
-  (e: "registerVersion", sourcePath: string): void;
+  (e: "registerVersion", sourcePath: string, displayName: string, version: string): void;
   (e: "uninstallSkill", path: string): void;
 }>();
 
@@ -528,7 +528,7 @@ onUnmounted(() => {
       @set-default="handleSetDefaultVersion"
       @rename-version="handleRenameVersion"
       @delete-version="handleDeleteVersion"
-      @register-version="$emit('registerVersion', $event)"
+      @register-version="(path, name, ver) => $emit('registerVersion', path, name, ver)"
       @adopt-to-repo="$emit('adoptToRepo', $event)"
     />
   </div>

@@ -554,7 +554,11 @@ export default {
       location: "location",
       locations: "locations",
       detected: "Detected Unregistered Versions",
-      register: "Register as Version"
+      register: "Register as Version",
+      registerForm: "Register New Version",
+      registerName: "Version Name",
+      registerVersion: "Version Number",
+      registerConfirm: "Confirm"
     },
     variants: {
       title: "Variants",
