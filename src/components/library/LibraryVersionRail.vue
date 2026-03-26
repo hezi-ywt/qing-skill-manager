@@ -90,20 +90,28 @@ const detectedVersions = computed(() => {
   const results: Array<{ id: string; label: string; scope: string; path: string }> = [];
   const seenPaths = new Set<string>();
 
-  // Collect project paths that have conflict status
-  const conflictProjectPaths = new Set<string>();
+  // Active version IDs — soft-deleted versions are not active
+  const activeVersionIds = new Set(sortedVersions.value.map((v) => v.id));
+
+  // Collect project paths that need detection
+  const detectProjectPaths = new Set<string>();
   for (const pm of props.librarySkill.projectMappings) {
-    if (pm.status === "conflict") {
-      conflictProjectPaths.add(pm.projectPath);
+    // Conflict: doesn't match any version
+    // Or matched to a soft-deleted version (versionId exists but not in active list)
+    if (pm.status === "conflict" ||
+        (pm.versionId && !activeVersionIds.has(pm.versionId))) {
+      detectProjectPaths.add(pm.projectPath);
     }
   }
 
-  // Global installations that are genuinely modified
+  // Global installations that are modified or matched to deleted version
   for (const inst of props.librarySkill.installations) {
-    if (inst.syncStatus !== "modified") continue;
-    // Skip if this path is inside a conflict project (will be shown via project mapping)
-    const isProjectCopy = conflictProjectPaths.has(inst.skillPath) ||
-      [...conflictProjectPaths].some((pp) => inst.skillPath.startsWith(pp + "/"));
+    const isModified = inst.syncStatus === "modified";
+    const isDeletedVersion = inst.versionId && !activeVersionIds.has(inst.versionId);
+    if (!isModified && !isDeletedVersion) continue;
+    // Skip if this path is inside a detected project
+    const isProjectCopy = detectProjectPaths.has(inst.skillPath) ||
+      [...detectProjectPaths].some((pp) => inst.skillPath.startsWith(pp + "/"));
     if (isProjectCopy) continue;
 
     if (!seenPaths.has(inst.skillPath)) {
@@ -117,9 +125,9 @@ const detectedVersions = computed(() => {
     }
   }
 
-  // Project mappings with conflict — find actual skill path from installations
+  // Project mappings with conflict or matched to deleted version
   for (const pm of props.librarySkill.projectMappings) {
-    if (pm.status !== "conflict") continue;
+    if (!detectProjectPaths.has(pm.projectPath)) continue;
     // Find the project-scope installation to get the real skill path
     const projectInst = props.librarySkill.installations.find(
       (i) => i.scope === "project" && i.skillPath.startsWith(pm.projectPath + "/")
