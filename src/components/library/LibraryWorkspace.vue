@@ -41,6 +41,8 @@ const emit = defineEmits<{
   (e: "retryDownload", taskId: string): void;
   (e: "removeFromQueue", taskId: string): void;
   (e: "setDefaultVersion", skillId: string, versionId: string): void;
+  (e: "renameVersion", skillId: string, versionId: string, newName: string): void;
+  (e: "deleteVersion", skillId: string, versionId: string): void;
   (e: "cloneToProject", project: CloneTargetProject, skillIds: string[]): void;
   (e: "compareVersions", fromVersionId: string, toVersionId: string): void;
   (e: "createVersion"): void;
@@ -316,10 +318,18 @@ function handleDeleteAll(): void {
 }
 
 function handleSetDefaultVersion(versionId: string): void {
-  if (!props.skillPackage) {
-    return;
-  }
+  if (!props.skillPackage) return;
   emit("setDefaultVersion", props.skillPackage.id, versionId);
+}
+
+function handleRenameVersion(versionId: string, newName: string): void {
+  if (!props.skillPackage) return;
+  emit("renameVersion", props.skillPackage.id, versionId, newName);
+}
+
+function handleDeleteVersion(versionId: string): void {
+  if (!props.skillPackage) return;
+  emit("deleteVersion", props.skillPackage.id, versionId);
 }
 
 function handleCloneToProject(projectId: string): void {
@@ -483,6 +493,8 @@ onUnmounted(() => {
       @compare-versions="handleCompareSelectedVersion"
       @create-version="$emit('createVersion')"
       @set-default="handleSetDefaultVersion"
+      @rename-version="handleRenameVersion"
+      @delete-version="handleDeleteVersion"
       @register-version="$emit('registerVersion', $event)"
     />
   </div>

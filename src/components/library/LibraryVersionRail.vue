@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { LibrarySkill, LocalSkill, SkillPackage, SkillVersion } from "../../composables/types";
 
@@ -13,13 +13,35 @@ const props = defineProps<{
   loading: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "selectVersion", version: SkillVersion): void;
   (e: "compareVersions", versionId: string): void;
   (e: "createVersion"): void;
   (e: "setDefault", versionId: string): void;
   (e: "registerVersion", sourcePath: string): void;
+  (e: "renameVersion", versionId: string, newName: string): void;
+  (e: "deleteVersion", versionId: string): void;
 }>();
+
+const editingVersionId = ref<string | null>(null);
+const editingName = ref("");
+
+function startRename(version: SkillVersion): void {
+  editingVersionId.value = version.id;
+  editingName.value = version.displayName;
+}
+
+function confirmRename(versionId: string): void {
+  const trimmed = editingName.value.trim();
+  if (trimmed && trimmed !== editingVersionId.value) {
+    emit("renameVersion", versionId, trimmed);
+  }
+  editingVersionId.value = null;
+}
+
+function cancelRename(): void {
+  editingVersionId.value = null;
+}
 
 const sortedVersions = computed<SkillVersion[]>(() => {
   return [...(props.skillPackage?.versions || [])].sort((a, b) => b.createdAt - a.createdAt);
@@ -114,9 +136,20 @@ const detectedVersions = computed(() => {
 
     <div v-else class="versions-list">
       <article v-for="version in sortedVersions" :key="version.id" class="card version-card" :class="{ active: isSelected(version.id), default: isDefault(version.id) }">
-        <button class="version-main" @click="$emit('selectVersion', version)">
+        <button class="version-main" @click="emit('selectVersion', version)">
           <div class="version-header">
-            <div class="card-title"><span class="repo-dot in-repo">●</span> {{ version.displayName }}</div>
+            <div class="card-title" v-if="editingVersionId !== version.id">
+              <span class="repo-dot in-repo">●</span> {{ version.displayName }}
+            </div>
+            <div v-else class="rename-inline" @click.stop>
+              <input
+                v-model="editingName"
+                class="rename-input"
+                @keydown.enter="confirmRename(version.id)"
+                @keydown.escape="cancelRename"
+                @blur="confirmRename(version.id)"
+              />
+            </div>
             <div class="version-badges">
               <span v-if="isDefault(version.id)" class="badge success">{{ t("library.versions.default") }}</span>
               <span v-if="skill.currentVersion?.id === version.id" class="badge muted">{{ t("library.versions.active") }}</span>
@@ -140,8 +173,10 @@ const detectedVersions = computed(() => {
           </div>
         </button>
         <div class="version-actions">
-          <button v-if="!isDefault(version.id)" class="ghost action-btn" @click="$emit('setDefault', version.id)">{{ t("library.versions.setDefault") }}</button>
-          <button v-if="skill.currentVersion?.id !== version.id" class="ghost action-btn" @click="$emit('compareVersions', version.id)">{{ t("library.versions.compare") }}</button>
+          <button class="ghost action-btn" @click.stop="startRename(version)">{{ t("library.versions.rename") }}</button>
+          <button v-if="!isDefault(version.id)" class="ghost action-btn" @click="emit('setDefault', version.id)">{{ t("library.versions.setDefault") }}</button>
+          <button v-if="skill.currentVersion?.id !== version.id" class="ghost action-btn" @click="emit('compareVersions', version.id)">{{ t("library.versions.compare") }}</button>
+          <button v-if="sortedVersions.length > 1" class="ghost danger action-btn" @click.stop="emit('deleteVersion', version.id)">{{ t("library.versions.delete") }}</button>
         </div>
       </article>
 
@@ -342,5 +377,21 @@ const detectedVersions = computed(() => {
 .version-card.detected {
   opacity: 0.8;
   border-style: dashed;
+}
+
+.rename-inline {
+  flex: 1;
+}
+
+.rename-input {
+  width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--color-input-focus);
+  border-radius: 6px;
+  background: var(--color-input-bg);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
 }
 </style>

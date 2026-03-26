@@ -547,6 +547,8 @@ export default {
       active: "Active",
       from: "from",
       setDefault: "Set as default",
+      rename: "Rename",
+      delete: "Delete",
       detected: "Detected Unregistered Versions",
       register: "Register as Version"
     },
