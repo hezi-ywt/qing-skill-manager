@@ -315,10 +315,19 @@ function handleClearSelection(): void {
 
 function handleAdoptSelected(): void {
   // Get paths of selected unmanaged skills
-  const paths = selectedIds.value
+  const unmanagedSkills = selectedIds.value
     .map((id) => props.librarySkills.find((ls) => ls.id === id))
-    .filter((ls) => ls && !ls.inRepo && ls.unmanagedSources.length > 0)
-    .map((ls) => ls!.unmanagedSources[0].path);
+    .filter((ls): ls is NonNullable<typeof ls> => !!ls && !ls.inRepo);
+
+  const paths: string[] = [];
+  for (const ls of unmanagedSkills) {
+    if (ls.unmanagedSources.length > 0) {
+      paths.push(ls.unmanagedSources[0].path);
+    } else if (ls.path) {
+      paths.push(ls.path);
+    }
+  }
+
   if (paths.length > 0) {
     emit("adoptManyToRepo", paths);
   }
