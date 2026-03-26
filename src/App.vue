@@ -199,13 +199,17 @@ async function handleConflictResolution(resolution: "keep" | "overwrite" | "coex
 async function handleRegisterVersion(sourcePath: string) {
   if (!currentSkillPackage.value) return;
   const pkg = currentSkillPackage.value;
-  const nextNum = pkg.versions.length + 1;
+  // Increment patch version from latest: 1.0.0 → 1.0.1 → 1.0.2
+  const latest = pkg.versions[0]?.version || "1.0.0";
+  const parts = latest.split(".");
+  const patch = parseInt(parts[2] || "0", 10) + 1;
+  const nextVersion = `${parts[0] || "1"}.${parts[1] || "0"}.${patch}`;
   try {
     await createVersion({
       skillId: pkg.id,
       sourcePath,
-      displayName: `v${nextNum}.0.0`,
-      version: `${nextNum}.0.0`,
+      displayName: nextVersion,
+      version: nextVersion,
       source: "import",
     });
   } catch (err) {
