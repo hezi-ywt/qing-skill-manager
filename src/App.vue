@@ -222,21 +222,21 @@ async function handleAdoptToRepo(path: string) {
   }
 }
 
+async function handleLibraryUninstallSkill(path: string) {
+  try {
+    await invoke("uninstall_skill", {
+      request: { targetPath: path, ideLabel: "", ideDirs: [], projectDir: null }
+    });
+    await scanLocalSkills();
+  } catch (err) {
+    console.error("Failed to uninstall skill:", err);
+  }
+}
+
 function handleLibrarySelectSkill(skill: LocalSkill) {
   if (!skill.currentVersion) return;
   const skillId = skill.currentVersion.skillId || skill.id;
   void loadSkillPackage(skillId);
-}
-
-function handleManageVersions(skill: LocalSkill) {
-  currentManagedSkillPath.value = skill.path;
-  selectedCreateVersionSourcePath.value = "";
-  versionImportProjectSkills.value = [];
-  versionImportProjectId.value = selectedProjectId.value;
-  if (selectedProjectId.value) {
-    void handlePickVersionImportProject(selectedProjectId.value);
-  }
-  openVersionManagerModal(skill.currentVersion?.skillId || skill.id);
 }
 
 async function handleCompareVersions(fromVersionId: string, toVersionId: string) {
@@ -386,7 +386,7 @@ async function handlePickVersionImportProject(projectId: string) {
           @select-skill="handleLibrarySelectSkill"
           @adopt-to-repo="handleAdoptToRepo"
           @register-version="handleRegisterVersion"
-          @manage-versions="handleManageVersions"
+          @uninstall-skill="handleLibraryUninstallSkill"
           @compare-versions="handleCompareVersions"
           @create-version="handleOpenCreateVersionFromLibrary"
           @set-default-version="setDefaultVersion"

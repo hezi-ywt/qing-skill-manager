@@ -18,9 +18,9 @@ defineEmits<{
   (e: "install", skill: LocalSkill): void;
   (e: "cloneToProject", projectId: string): void;
   (e: "openDir", path: string): void;
-  (e: "manageVersions", skill: LocalSkill): void;
   (e: "delete", skill: LocalSkill): void;
   (e: "adoptToRepo", path: string): void;
+  (e: "uninstallSkill", path: string): void;
 }>();
 
 const isInstalling = computed<boolean>(() => {
@@ -60,7 +60,10 @@ function getSyncLabel(status: string): string {
 function getVersionName(versionId: string | null): string {
   if (!versionId || !props.librarySkill) return "";
   const vs = props.librarySkill.versions.find((v) => v.id === versionId);
-  return vs?.displayName || versionId;
+  if (vs) return vs.displayName;
+  // Fallback: extract version part before the hash suffix (e.g., "1.0.0_abc12345" → "1.0.0")
+  const underscoreIdx = versionId.lastIndexOf("_");
+  return underscoreIdx > 0 ? versionId.substring(0, underscoreIdx) : versionId;
 }
 
 const cloneProjects = computed(() => {
@@ -150,9 +153,8 @@ function getMappingDescription(status: string): string {
         </div>
 
         <div class="header-actions">
-          <button class="ghost" :disabled="isInstalling" @click="$emit('openDir', skill.path)">{{ t("library.detail.openDir") }}</button>
-          <button class="ghost" @click="$emit('manageVersions', skill)">{{ t("library.detail.versions") }}</button>
-          <button class="ghost danger btn-sm" @click="$emit('delete', skill)">{{ t("local.deleteOne") }}</button>
+          <button class="ghost" @click="$emit('openDir', skill.path)">{{ t("library.detail.openRepoDir") }}</button>
+          <button class="ghost danger btn-sm" @click="$emit('delete', skill)">{{ t("library.detail.deleteFromRepo") }}</button>
         </div>
       </div>
 
@@ -189,8 +191,12 @@ function getMappingDescription(status: string): string {
             <div class="install-info">
               <span class="install-ide">{{ inst.ideLabel }}</span>
               <span v-if="inst.versionId" class="version-meta-text">{{ getVersionName(inst.versionId) }}</span>
+              <span class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
             </div>
-            <span class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
+            <div class="install-actions">
+              <button class="ghost btn-xs" @click="$emit('openDir', inst.skillPath)">{{ t("ide.openDir") }}</button>
+              <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', inst.skillPath)">{{ t("ide.uninstall") }}</button>
+            </div>
           </div>
         </div>
       </section>
@@ -223,8 +229,14 @@ function getMappingDescription(status: string): string {
               </div>
               <div class="mapping-status-desc hint">{{ getMappingDescription(mapping.status) }}</div>
             </div>
-            <div v-if="mapping.status === 'missing'" class="mapping-action">
-              <button class="ghost btn-sm" @click="$emit('cloneToProject', mapping.projectId)">{{ t("library.actions.clone") }}</button>
+            <div class="mapping-action">
+              <template v-if="mapping.status === 'missing'">
+                <button class="ghost btn-sm" @click="$emit('cloneToProject', mapping.projectId)">{{ t("library.actions.clone") }}</button>
+              </template>
+              <template v-else>
+                <button class="ghost btn-xs" @click="$emit('openDir', mapping.projectPath)">{{ t("ide.openDir") }}</button>
+                <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', mapping.projectPath + '/' + (skill?.name || ''))">{{ t("ide.uninstall") }}</button>
+              </template>
             </div>
           </article>
         </div>
@@ -485,6 +497,17 @@ function getMappingDescription(status: string): string {
 .install-ide {
   font-weight: 600;
   font-size: 13px;
+}
+
+.install-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.btn-xs {
+  padding: 2px 6px;
+  font-size: 11px;
 }
 
 .repo-dot {

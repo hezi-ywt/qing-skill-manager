@@ -40,7 +40,6 @@ const emit = defineEmits<{
   (e: "import"): void;
   (e: "retryDownload", taskId: string): void;
   (e: "removeFromQueue", taskId: string): void;
-  (e: "manageVersions", skill: LocalSkill): void;
   (e: "setDefaultVersion", skillId: string, versionId: string): void;
   (e: "cloneToProject", project: CloneTargetProject, skillIds: string[]): void;
   (e: "compareVersions", fromVersionId: string, toVersionId: string): void;
@@ -48,6 +47,7 @@ const emit = defineEmits<{
   (e: "selectSkill", skill: LocalSkill): void;
   (e: "adoptToRepo", path: string): void;
   (e: "registerVersion", sourcePath: string): void;
+  (e: "uninstallSkill", path: string): void;
 }>();
 
 const searchQuery = ref("");
@@ -465,9 +465,9 @@ onUnmounted(() => {
       @install="$emit('install', $event)"
       @clone-to-project="handleCloneToProject"
       @open-dir="$emit('openDir', $event)"
-      @manage-versions="$emit('manageVersions', $event)"
       @delete="handleDelete"
       @adopt-to-repo="$emit('adoptToRepo', $event)"
+      @uninstall-skill="$emit('uninstallSkill', $event)"
     />
 
     <div class="splitter" @mousedown="onSplitterDown('right', $event)" />
