@@ -147,16 +147,15 @@ const detectedVersions = computed(() => {
     <div v-else-if="loading" class="empty-state hint">{{ t("library.versions.loading") }}</div>
     <div v-else-if="sortedVersions.length === 0 && librarySkill && !librarySkill.inRepo" class="unmanaged-sources">
       <div class="detected-header">{{ t("library.versions.sources") }}</div>
-      <article v-for="src in librarySkill.unmanagedSources" :key="src.path" class="card version-card detected">
+      <article class="card version-card detected">
         <div class="version-main">
-          <div class="version-header">
-            <div class="card-title"><span class="repo-dot not-in-repo">○</span> {{ src.ide }}</div>
-            <span class="badge muted">{{ src.scope === "global" ? t("ide.scopeGlobal") : t("ide.scopeProject") }}</span>
+          <div v-for="src in librarySkill.unmanagedSources" :key="src.path" class="source-entry">
+            <span class="deploy-name">{{ src.ide }} · {{ src.scope === "global" ? t("ide.scopeGlobal") : t("ide.scopeProject") }}</span>
+            <div class="card-meta">{{ src.path }}</div>
           </div>
-          <div class="card-meta">{{ src.path }}</div>
         </div>
         <div class="version-actions">
-          <button class="ghost action-btn" @click="emit('registerVersion', src.path)">{{ t("library.adoptToRepo") }}</button>
+          <button class="ghost action-btn" @click="emit('registerVersion', librarySkill.unmanagedSources[0].path)">{{ t("library.adoptToRepo") }}</button>
         </div>
       </article>
     </div>
@@ -407,6 +406,16 @@ const detectedVersions = computed(() => {
 .version-card.detected {
   opacity: 0.8;
   border-style: dashed;
+}
+
+.source-entry {
+  padding: 4px 0;
+}
+
+.source-entry + .source-entry {
+  border-top: 1px solid var(--color-card-border);
+  margin-top: 4px;
+  padding-top: 8px;
 }
 
 .rename-inline {
