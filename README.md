@@ -2,140 +2,126 @@
 
 [English](README.md) | [中文](README_zh-CN.md)
 
-**A rebranded fork for multi-IDE AI skill distribution and version management.**
+> A desktop app for discovering, managing, and distributing AI skills across multiple IDEs and projects.
 
-Qing Skill Manager helps you search, import, version, and distribute AI skills across supported IDEs and project workspaces. It provides a unified local repository, clone/copy-based project delivery, project-side conflict detection, and managed version matching for teams or individual creators who want tighter control over their skill assets.
+<p align="center">
+  <img src="docs/screenshots/en-US/market.png" width="720" alt="Marketplace Search" />
+</p>
 
-Built with **Tauri 2 + Vue 3 + Rust**, the project targets a practical workflow:
+Qing Skill Manager gives you a single place to search public skill marketplaces, store skills in a local repository, install them globally to any supported IDE, and clone versioned copies into individual projects — with conflict detection and resolution built in.
 
-- discover skills from multiple marketplaces
-- store them in a managed local repository
-- install them into global IDE directories
-- clone them into project-specific environments
-- track imported versions and resolve project conflicts clearly
+Built with **Tauri 2 + Vue 3 + Rust**. Cross-platform desktop app.
 
-## Acknowledgement
+## Screenshots
 
-Qing Skill Manager is built on top of the original [skills-manager](https://github.com/Rito-w/skills-manager). Thanks to the original author and all contributors for the groundwork that made this fork possible.
+| Local Skills | Market |
+|:---:|:---:|
+| ![Local Skills](docs/screenshots/en-US/local.png) | ![Market](docs/screenshots/en-US/market.png) |
 
-> Screenshots are being refreshed for the Qing Skill Manager rebrand.
-> Legacy screenshots from the upstream project have been removed to avoid branding confusion.
+| IDE Browser | Projects |
+|:---:|:---:|
+| ![IDE Browser](docs/screenshots/en-US/ide.png) | ![Projects](docs/screenshots/en-US/project.png) |
 
-## ✨ Core Features
+## Features
 
-- 🧭 **Layout-Adapted Library Workspace**: A new three-column Library view for browsing skills, inspecting versions, and seeing installation context at a glance while preserving the app's original visual language
-- 🔍 **Aggregated Market Search**: Search quality skills from public registries in one place
-- 📦 **Unified Local Repository**: Centralized management of downloaded skills (`~/.qing-skill-manager/skills`)
-- 🚀 **One-Click Installation**: Install unified local skills to target IDEs in seconds
-- 🛠️ **Multi-Dimensional Management**: Browse skills per IDE, uninstall cleanly and safely
-- ⚙️ **Project Management**: Manage projects, clone skills into projects, and configure IDEs per project
+### Marketplace Search
 
-## 🎯 Natively Supported IDEs (Alphabetical Order)
+Search skills from multiple public registries (Claude Plugins, SkillsLLM, SkillsMP) in one unified interface. Download new skills or update existing ones with a single click.
 
-- **Claude Code**: `.claude/skills`
-- **Codex**: `.codex/skills`
-- **Cursor**: `.cursor/skills`
-- **OpenClaw**: `.openclaw/skills`
-- **OpenCode**: `.config/opencode/skills` (project: `.opencode/skills`)
+### Local Repository
 
-## 📖 Usage Guide
+All downloaded skills are stored centrally at `~/.qing-skill-manager/skills`. Browse, search, filter, and manage your entire skill collection from the Local Skills tab.
 
-### 📥 Installation & Usage
+### One-Click IDE Installation
 
-- **General Users**: Build from source or publish releases from your own fork.
-- **Developers**: Clone the source code repository to run locally or customize in-depth.
+Install any local skill to one or more IDEs at once. Supports global installation (available everywhere) and project-level cloning (scoped to a specific project).
 
-### 🍎 macOS Security Note
+### IDE Browser
 
-Since Apple developer commercial signature is not configured yet, opening the app for the first time may trigger "App is damaged and can't be opened" or "from an unidentified developer" warnings. You can run the following terminal command to bypass it:
+Switch between IDEs to see what's installed in each one. Uninstall cleanly, or adopt unmanaged skills (ones you placed manually) into your central repository for proper tracking.
 
-```bash
-xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
-```
+### Project Management
 
-### 🔍 1) Market
+Register your projects, configure which IDEs each project targets, and deploy skills directly. The app detects existing project skills automatically and flags version conflicts with clear resolution options (keep, overwrite, or coexist).
 
-- Aggregated display of available skills from configured data sources.
-- Clicking download automatically adds it to your local repository. If an older version exists, an "Update" button will be highlighted instead.
+### Version Management
 
-### 🗂️ 2) Local Skills
+Track multiple versions of each skill with Git-style version history. Compare versions side-by-side, set defaults, create variants for different use cases, and pin specific versions to specific projects.
 
-- Overview of all skills currently downloaded to your local repository.
-- Click "Install" to select target IDEs for deployment.
+### Custom IDE Support
 
-### 🧱 3) Library Workspace
+Don't see your IDE? Add a custom IDE by specifying its name and skills directory path. Your custom IDE then works identically to the built-in ones.
 
-- The Local tab now uses a **Library workspace** adapted from the layout sketch, with sidebar, detail panel, and version rail.
-- The left column supports quick search, multi-select, and skill switching; the center column focuses on description, path, source, installation status, project mappings, and clone-to-project entry points; the right rail surfaces version history and comparison actions.
-- This view is now the main frontend surface for version mapping, project usage inspection, and clone-to-project workflows.
+## Supported IDEs
 
-### ⌨️ 4) IDE Browser
+| IDE | Global Path | Project Path |
+|-----|------------|--------------|
+| Claude Code | `~/.claude/skills` | `.claude/skills` |
+| Codex | `~/.codex/skills` | `.codex/skills` |
+| Cursor | `~/.cursor/skills` | `.cursor/skills` |
+| OpenClaw | `~/.openclaw/skills` | `.openclaw/skills` |
+| OpenCode | `~/.config/opencode/skills` | `.opencode/skills` |
 
-- Switch workspace perspective (e.g., VSCode or Cursor) to view installed skills for each IDE.
-- Safe Uninstallation: Removes the installed skill directory safely.
-- Can't find your IDE? Click "Add Custom IDE" in the top right to register its skills directory.
+Plus any custom IDE you register.
 
-## 🏗 Frontend Architecture Notes
-
-- `src/App.vue` remains the application orchestrator, but the Local tab now mounts `src/components/library/LibraryWorkspace.vue`.
-- `src/components/library/` contains the new Library domain UI:
-  - `LibrarySidebar.vue`
-  - `LibraryDetailPanel.vue`
-  - `LibraryVersionRail.vue`
-  - `LibraryWorkspace.vue`
-- `src/composables/useLibraryWorkspace.ts` derives UI-ready Library data from existing local skills, IDE installations, project snapshots, and version metadata.
-- Existing Market / IDE / Projects / Settings flows remain intact; the refactor is intentionally frontend-focused and does not require Rust backend changes.
-
-## 👨‍💻 Installation & Development
+## Getting Started
 
 ### Prerequisites
 
-- Node.js (LTS recommended)
-- Rust (installed via rustup)
+- [Node.js](https://nodejs.org/) (LTS)
+- [Rust](https://rustup.rs/)
+- [pnpm](https://pnpm.io/)
 - macOS: Xcode Command Line Tools
 
-### Local Development
+### Install & Run
 
 ```bash
+git clone <your-fork-url>
+cd skills-manager
 pnpm install
 pnpm tauri dev
 ```
 
-### Testing
-
-- Test script documentation: [`docs/testing-guide.md`](docs/testing-guide.md)
-- Recommended project check:
-
-```bash
-pnpm run check:project
-```
-
-- Frontend-only verification for the Library workspace refactor:
-
-```bash
-pnpm run typecheck
-pnpm run build
-```
-
-### Build & Release
+### Build
 
 ```bash
 pnpm tauri build
 ```
 
-## 📡 Remote Data Sources
+### macOS Security Note
 
-- **Claude Plugins**: `https://claude-plugins.dev/api/skills`
-- **SkillsLLM**: `https://skillsllm.com/api/skills`
-- **SkillsMP**: `https://skillsmp.com/api/v1/skills/search` (API key configuration may be required due to CORS restrictions)
-- Source Code Download Proxy: `https://github-zip-api.val.run/zip?source=<repo>`
+The app is not yet signed with an Apple Developer certificate. On first launch you may see "App is damaged" or "unidentified developer" warnings. Run this to bypass:
 
-## 🛠 Tech Stack
+```bash
+xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
+```
 
-- Desktop Runtime Framework: **Tauri 2**
-- Frontend UI Layer: **Vue 3** + **TypeScript** + **Vite**
-- System Operations Layer: **Rust** (Command side)
+## Quick Workflow
 
-## 📄 License
+1. **Search** — Go to Market, search for a skill, click Download
+2. **Browse** — Switch to Local Skills to see your downloaded collection
+3. **Install** — Click "Install to IDE" and pick your target IDEs
+4. **Project deploy** — In Projects, add your project, configure IDE targets, then link skills
+5. **Stay in sync** — The app detects conflicts when project skills differ from your repo and guides you through resolution
+
+## Data Sources
+
+| Source | URL |
+|--------|-----|
+| Claude Plugins | `https://claude-plugins.dev/api/skills` |
+| SkillsLLM | `https://skillsllm.com/api/skills` |
+| SkillsMP | `https://skillsmp.com/api/v1/skills/search` (API key may be required) |
+
+## Tech Stack
+
+- **Desktop**: Tauri 2 (Rust backend, WebView frontend)
+- **Frontend**: Vue 3 + TypeScript + Vite
+- **Language**: English & Simplified Chinese (vue-i18n)
+
+## Acknowledgement
+
+Qing Skill Manager is built on top of the original [skills-manager](https://github.com/Rito-w/skills-manager). Thanks to the original author and all contributors.
+
+## License
 
 MIT

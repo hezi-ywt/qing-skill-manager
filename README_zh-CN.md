@@ -2,140 +2,126 @@
 
 [English](README.md) | [中文](README_zh-CN.md)
 
-**一个面向多 IDE AI Skill 分发与版本管理的重新包装 fork。**
+> 一款用于发现、管理和分发 AI Skills 到多个 IDE 与项目的桌面应用。
 
-Qing Skill Manager 用于搜索、导入、版本化管理并分发 AI skills 到受支持的 IDE 与项目工作区。它提供统一本地仓库、基于 clone/copy 的项目分发方式、项目侧冲突检测，以及更清晰的受管版本匹配能力，适合希望更稳定管理 skill 资产的个人开发者与团队。
+<p align="center">
+  <img src="docs/screenshots/zh-CN/market.png" width="720" alt="商店检索" />
+</p>
 
-项目基于 **Tauri 2 + Vue 3 + Rust** 构建，核心工作流包括：
+Qing Skill Manager 让你在一个地方搜索公共 Skill 市场、将 Skills 存入本地仓库、一键安装到任意支持的 IDE，并将带版本控制的副本克隆到各个项目中——内建冲突检测与解决机制。
 
-- 从多个 marketplace 检索 skills
-- 统一存入本地受管仓库
-- 安装到全局 IDE 目录
-- 克隆到项目级 IDE 环境
-- 跟踪导入版本并清晰处理项目冲突
+基于 **Tauri 2 + Vue 3 + Rust** 构建，跨平台桌面应用。
 
-## 致谢
+## 界面预览
 
-Qing Skill Manager 基于原始项目 [skills-manager](https://github.com/Rito-w/skills-manager) 继续开发。感谢原作者与所有贡献者提供的基础能力与实现。 
+| 本地技能库 | 商店检索 |
+|:---:|:---:|
+| ![本地技能库](docs/screenshots/zh-CN/local.png) | ![商店检索](docs/screenshots/zh-CN/market.png) |
 
-> 截图正在根据 Qing Skill Manager 新品牌重新制作。
-> 为避免与上游项目混淆，已移除继承自原项目的旧截图。
+| IDE 浏览 | 项目管理 |
+|:---:|:---:|
+| ![IDE 浏览](docs/screenshots/zh-CN/ide.png) | ![项目管理](docs/screenshots/zh-CN/project.png) |
 
-## ✨ 核心特性
+## 功能特性
 
-- 🧭 **按布局草图适配的 Library 工作台**：新增三栏式技能库视图，在保留原项目视觉语言的前提下统一浏览技能、检查版本与查看安装上下文
-- 🔍 **聚合市场检索**：基于公开 Registry，一站式搜索全网优质 Skills
-- 📦 **统一本地仓库**：集中化管理下载内容 (`~/.qing-skill-manager/skills`)
-- 🚀 **一键极速分发**：将统一的本地 Skills 快速安装至各个目标 IDE
-- 🛠️ **多维管理界面**：支持基于 IDE 的细粒度浏览、无痕安全卸载机制
-- ⚙️ **项目管理**：支持项目管理，将 skills 克隆到项目下，并配置项目使用的 IDE
+### 聚合市场检索
 
-## 🎯 原生支持的 IDE（按字母顺序）
+一站式搜索多个公共 Skill 注册中心（Claude Plugins、SkillsLLM、SkillsMP）。一键下载新 Skill 或更新已有版本。
 
-- **Claude Code**: `.claude/skills`
-- **Codex**: `.codex/skills`
-- **Cursor**: `.cursor/skills`
-- **OpenClaw**: `.openclaw/skills`
-- **OpenCode**: `.config/opencode/skills`（项目级: `.opencode/skills`）
+### 统一本地仓库
 
-## 📖 使用指南
+所有下载的 Skills 集中存储在 `~/.qing-skill-manager/skills`。在"已有 Skills"标签页中浏览、搜索、筛选和管理你的全部技能。
 
-### 📥 获取与使用
+### 一键安装到 IDE
 
-- **普通用户**：请从源码构建，或在你自己的 fork 中发布版本。
-- **开发者**：拉取源码在本地运行，或进行深度定制。
+将任意本地 Skill 同时安装到一个或多个 IDE。支持全局安装（所有项目可用）和项目级克隆（仅限特定项目）。
 
-### 🍎 macOS 安全使用要求
+### IDE 维度浏览
 
-由于目前暂时未配置 Apple 开发者商业证书，初次打开应用可能会遇到“已损坏，无法打开”或提示“未知的开发者”等系统拦截。作为开发者或极客用户，您可以在终端执行以下命令进行安全放行：
+切换不同 IDE 查看各自的安装情况。安全卸载，或将手动放置的未托管 Skill 纳入中央仓库统一管理。
 
-```bash
-xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
-```
+### 项目管理
 
-### 🔍 1) 市场浏览 (Market)
+注册你的项目、配置每个项目使用的 IDE、直接部署 Skills。应用会自动检测项目中已有的 Skills，并在版本不一致时提供清晰的冲突解决方案（保留、覆盖或共存）。
 
-- 基于配置好的服务源，聚合展示全网可用的优质 Skills。
-- 点击下载将自动入库至本地，若本地仓库已存在较旧版本，将高亮显示“更新”按钮。
+### 版本管理
 
-### 🗂️ 2) 本地仓库 (Local Skills)
+以 Git 风格跟踪每个 Skill 的多个版本。支持版本对比、设置默认版本、为不同场景创建变体，以及为特定项目锁定指定版本。
 
-- 集中俯瞰已下载到设备底层仓库的所有 Skills。
-- 点击“安装”，即可在弹出的面板中勾选一个或多个原生 / 自定义的 IDE 进行批量安装。
+### 自定义 IDE 支持
 
-### 🧱 3) Library 工作台
+找不到你的 IDE？只需指定名称和 Skills 目录路径即可添加自定义 IDE，功能与内置 IDE 完全一致。
 
-- Local 标签页现在承载一个按布局草图适配的 **Library 工作台**，整体由左侧技能栏、中间详情区、右侧版本轨组成。
-- 左栏负责搜索、多选与切换 skill；中栏聚焦描述、路径、来源、安装状态、项目映射与克隆到项目入口；右栏展示版本列表、默认版本与版本对比入口。
-- 这个视图现在已经成为版本映射、项目使用情况、克隆到项目等交互的主前端承载面。
+## 支持的 IDE
 
-### ⌨️ 4) IDE 纬度管理 (IDE Browse)
+| IDE | 全局路径 | 项目路径 |
+|-----|---------|---------|
+| Claude Code | `~/.claude/skills` | `.claude/skills` |
+| Codex | `~/.codex/skills` | `.codex/skills` |
+| Cursor | `~/.cursor/skills` | `.cursor/skills` |
+| OpenClaw | `~/.openclaw/skills` | `.openclaw/skills` |
+| OpenCode | `~/.config/opencode/skills` | `.opencode/skills` |
 
-- 灵活切换工作环境视角（如 VSCode 或 Cursor），独立查看各自已安装的技能列表。
-- 安全卸载模块：安全移除已安装技能目录，避免相互干扰。
-- 找不到您的生产力工具？只需在右上角轻松创建你的“自定义 IDE”。
+还可以注册任意自定义 IDE。
 
-## 🏗 前端架构补充说明
+## 快速开始
 
-- `src/App.vue` 仍然是应用编排中心，但 Local 标签页现在会挂载 `src/components/library/LibraryWorkspace.vue`。
-- `src/components/library/` 目录承载新的 Library 域组件：
-  - `LibrarySidebar.vue`
-  - `LibraryDetailPanel.vue`
-  - `LibraryVersionRail.vue`
-  - `LibraryWorkspace.vue`
-- `src/composables/useLibraryWorkspace.ts` 基于已有本地 skills、IDE 安装信息、项目快照与版本元数据，派生出 Library 工作台所需的视图模型。
-- Market / IDE / Projects / Settings 既有流程保持不变；本轮改造重点在前端结构与交互表现，不要求修改 Rust 后端。
+### 环境要求
 
-## 👨‍💻 安装与开发
-
-### 环境依赖
-
-- Node.js (建议 LTS)
-- Rust (通过 rustup 安装)
+- [Node.js](https://nodejs.org/) (LTS 版本)
+- [Rust](https://rustup.rs/)
+- [pnpm](https://pnpm.io/)
 - macOS: Xcode Command Line Tools
 
-### 本地开发
+### 安装与运行
 
 ```bash
+git clone <your-fork-url>
+cd skills-manager
 pnpm install
 pnpm tauri dev
 ```
 
-### 测试说明
-
-- 测试脚本文档：[`docs/testing-guide.md`](docs/testing-guide.md)
-- 推荐的项目检查命令：
-
-```bash
-pnpm run check:project
-```
-
-- 针对本次 Library 工作台前端改造，建议至少执行：
-
-```bash
-pnpm run typecheck
-pnpm run build
-```
-
-### 打包发布
+### 构建
 
 ```bash
 pnpm tauri build
 ```
 
-## 📡 远程数据来源
+### macOS 安全提示
 
-- **Claude Plugins**: `https://claude-plugins.dev/api/skills`
-- **SkillsLLM**: `https://skillsllm.com/api/skills`
-- **SkillsMP**: `https://skillsmp.com/api/v1/skills/search`（由于跨域限制可能需要提供 API Key 配置）
-- 下载 ZIP 请求代理: `https://github-zip-api.val.run/zip?source=<repo>`
+应用尚未配置 Apple 开发者签名。首次启动可能会提示"应用已损坏"或"来自身份不明的开发者"。执行以下命令即可放行：
 
-## 🛠 技术栈
+```bash
+xattr -dr com.apple.quarantine "/Applications/qing-skill-manager.app"
+```
 
-- 桌面端核心框架：**Tauri 2**
-- 前端视图层：**Vue 3** + **TypeScript** + **Vite**
-- 底层文件与系统逻辑：**Rust** (命令侧)
+## 典型工作流
 
-## 📄 License
+1. **搜索** — 进入 Market 标签页，搜索 Skill，点击下载
+2. **浏览** — 切换到"已有 Skills"查看已下载的技能
+3. **安装** — 点击"安装到 IDE"，选择目标 IDE
+4. **项目部署** — 在"项目管理"中添加项目、配置 IDE 目标，然后关联 Skills
+5. **保持同步** — 当项目中的 Skill 与仓库版本不一致时，应用会自动检测冲突并引导你完成解决
+
+## 数据来源
+
+| 来源 | 地址 |
+|------|------|
+| Claude Plugins | `https://claude-plugins.dev/api/skills` |
+| SkillsLLM | `https://skillsllm.com/api/skills` |
+| SkillsMP | `https://skillsmp.com/api/v1/skills/search`（可能需要配置 API Key） |
+
+## 技术栈
+
+- **桌面端**: Tauri 2（Rust 后端 + WebView 前端）
+- **前端**: Vue 3 + TypeScript + Vite
+- **多语言**: 中文 & English（vue-i18n）
+
+## 致谢
+
+Qing Skill Manager 基于 [skills-manager](https://github.com/Rito-w/skills-manager) 原始项目继续开发。感谢原作者与所有贡献者。
+
+## 许可证
 
 MIT
