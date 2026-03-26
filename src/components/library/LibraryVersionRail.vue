@@ -61,7 +61,14 @@ function getVersionUsage(versionId: string): { ideCount: number; projectCount: n
 }
 
 function getVersionDeployments(versionId: string) {
-  const installations = props.librarySkill?.installations.filter((i) => i.versionId === versionId) || [];
+  const allInst = props.librarySkill?.installations.filter((i) => i.versionId === versionId) || [];
+  // Dedup by path
+  const seen = new Set<string>();
+  const installations = allInst.filter((i) => {
+    if (seen.has(i.skillPath)) return false;
+    seen.add(i.skillPath);
+    return true;
+  });
   const projects = props.librarySkill?.projectMappings.filter((p) => p.versionId === versionId) || [];
   return { installations, projects };
 }
@@ -178,7 +185,7 @@ const detectedVersions = computed(() => {
           </div>
           <div v-if="getVersionDeployments(version.id).installations.length > 0 || getVersionDeployments(version.id).projects.length > 0" class="deployment-list">
             <div v-for="inst in getVersionDeployments(version.id).installations" :key="inst.skillPath" class="deployment-entry">
-              <span class="deploy-name">{{ inst.ideLabel }}</span>
+              <span class="deploy-name">{{ inst.ideLabel }}<span v-if="inst.scope === 'project'" class="deploy-scope"> ({{ t("ide.scopeProject") }})</span></span>
               <span class="deploy-sync" :class="getSyncClass(inst.syncStatus)">{{ getSyncIcon(inst.syncStatus) }}</span>
             </div>
             <div v-for="proj in getVersionDeployments(version.id).projects" :key="proj.projectId" class="deployment-entry">
@@ -369,6 +376,8 @@ const detectedVersions = computed(() => {
   font-weight: 600;
   font-size: 11px;
 }
+
+.deploy-scope { font-size: 10px; opacity: 0.7; }
 
 .deploy-sync.sync-ok { color: var(--color-success-text); }
 .deploy-sync.sync-warn { color: #d97706; }

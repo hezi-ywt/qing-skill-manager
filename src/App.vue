@@ -234,7 +234,11 @@ async function handleLibraryUninstallSkill(path: string) {
 }
 
 function handleLibrarySelectSkill(skill: LocalSkill) {
-  if (!skill.currentVersion) return;
+  if (!skill.currentVersion) {
+    // Unmanaged skill — clear previous package
+    currentSkillPackage.value = null;
+    return;
+  }
   const skillId = skill.currentVersion.skillId || skill.id;
   void loadSkillPackage(skillId);
 }
