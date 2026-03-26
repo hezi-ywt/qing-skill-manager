@@ -550,6 +550,8 @@ export default {
       rename: "重命名",
       delete: "删除",
       sources: "来源位置",
+      location: "个位置",
+      locations: "个位置",
       detected: "检测到的未注册版本",
       register: "注册为版本"
     },

@@ -131,6 +131,22 @@ const detectedVersions = computed(() => {
 
   return results;
 });
+
+// Group unmanaged sources by contentHash — same content = same version
+const groupedUnmanagedSources = computed(() => {
+  if (!props.librarySkill) return [];
+  const groups = new Map<string, typeof props.librarySkill.unmanagedSources>();
+  for (const src of props.librarySkill.unmanagedSources) {
+    const key = src.contentHash || src.path;
+    const group = groups.get(key);
+    if (group) {
+      group.push(src);
+    } else {
+      groups.set(key, [src]);
+    }
+  }
+  return [...groups.entries()].map(([hash, sources]) => ({ hash, sources }));
+});
 </script>
 
 <template>
@@ -146,21 +162,23 @@ const detectedVersions = computed(() => {
     <div v-if="!skill" class="empty-state hint">{{ t("library.versions.noSkill") }}</div>
     <div v-else-if="loading" class="empty-state hint">{{ t("library.versions.loading") }}</div>
     <div v-else-if="sortedVersions.length === 0 && librarySkill && !librarySkill.inRepo" class="versions-list">
-      <article v-for="src in librarySkill.unmanagedSources" :key="src.path" class="card version-card detected">
-        <button class="version-main" @click="emit('registerVersion', src.path)">
+      <article v-for="group in groupedUnmanagedSources" :key="group.hash" class="card version-card detected">
+        <button class="version-main" @click="emit('registerVersion', group.sources[0].path)">
           <div class="version-header">
-            <div class="card-title"><span class="repo-dot not-in-repo">○</span> {{ src.label }}</div>
+            <div class="card-title"><span class="repo-dot not-in-repo">○</span> {{ t("library.status.unmanaged") }}</div>
             <div class="version-badges">
-              <span class="badge muted">{{ t("library.status.unmanaged") }}</span>
+              <span class="badge muted">{{ group.sources.length }} {{ group.sources.length > 1 ? t("library.versions.locations") : t("library.versions.location") }}</span>
             </div>
           </div>
-          <div class="card-meta">{{ src.path }}</div>
-          <div class="version-usage">
-            <span class="usage-tag">{{ src.ide }} · {{ src.scope === "global" ? t("ide.scopeGlobal") : t("ide.scopeProject") }}</span>
+          <div class="deployment-list">
+            <div v-for="src in group.sources" :key="src.path" class="deployment-entry">
+              <span class="deploy-name">{{ src.label }}</span>
+              <span class="deploy-sync sync-muted">{{ src.ide }}</span>
+            </div>
           </div>
         </button>
         <div class="version-actions">
-          <button class="ghost action-btn" @click="emit('registerVersion', src.path)">{{ t("library.adoptToRepo") }}</button>
+          <button class="ghost action-btn" @click="emit('registerVersion', group.sources[0].path)">{{ t("library.adoptToRepo") }}</button>
         </div>
       </article>
     </div>

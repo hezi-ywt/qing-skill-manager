@@ -511,6 +511,7 @@ export type LibrarySkill = {
     scope: "global" | "project";
     path: string;
     label: string;
+    contentHash: string | null;
   }>;
 };
 

@@ -141,7 +141,8 @@ export function useLibraryWorkspace(options: UseLibraryWorkspaceOptions) {
         ide: ideSkill.ide,
         scope,
         path: ideSkill.path,
-        label: getSourceLabel(ideSkill)
+        label: getSourceLabel(ideSkill),
+        contentHash: ideSkill.contentHash
       };
 
       const existing = unmanagedMap.get(ideSkill.name);
