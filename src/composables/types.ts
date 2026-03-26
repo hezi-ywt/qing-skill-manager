@@ -510,6 +510,7 @@ export type LibrarySkill = {
     ide: string;
     scope: "global" | "project";
     path: string;
+    label: string;
   }>;
 };
 

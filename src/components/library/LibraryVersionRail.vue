@@ -150,7 +150,7 @@ const detectedVersions = computed(() => {
       <article class="card version-card detected">
         <div class="version-main">
           <div v-for="src in librarySkill.unmanagedSources" :key="src.path" class="source-entry">
-            <span class="deploy-name">{{ src.ide }} · {{ src.scope === "global" ? t("ide.scopeGlobal") : t("ide.scopeProject") }}</span>
+            <span class="deploy-name">{{ src.label }}</span>
             <div class="card-meta">{{ src.path }}</div>
           </div>
         </div>

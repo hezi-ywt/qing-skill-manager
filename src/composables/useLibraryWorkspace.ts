@@ -125,19 +125,29 @@ export function useLibraryWorkspace(options: UseLibraryWorkspaceOptions) {
     const managedNames = new Set(repoSkills.map((s) => s.name));
     const unmanagedMap = new Map<string, LibrarySkill>();
 
+    function getSourceLabel(ideSkill: IdeSkill): string {
+      if (ideSkill.scope === "global") return `${ideSkill.ide} · ${t("ide.scopeGlobal")}`;
+      // Find project name from path
+      const project = projects.value.find((p) => ideSkill.path.startsWith(p.path));
+      return project ? project.name : ideSkill.ide;
+    }
+
     for (const ideSkill of ideSkills.value) {
       if (ideSkill.managed || managedNames.has(ideSkill.name) || ideSkill.scope === "plugin") {
         continue;
       }
+      const scope = ideSkill.scope as "global" | "project";
+      const sourceEntry = {
+        ide: ideSkill.ide,
+        scope,
+        path: ideSkill.path,
+        label: getSourceLabel(ideSkill)
+      };
+
       const existing = unmanagedMap.get(ideSkill.name);
       if (existing) {
-        existing.unmanagedSources.push({
-          ide: ideSkill.ide,
-          scope: ideSkill.scope as "global" | "project",
-          path: ideSkill.path
-        });
+        existing.unmanagedSources.push(sourceEntry);
       } else {
-        const scope = ideSkill.scope as "global" | "project";
         unmanagedMap.set(ideSkill.name, {
           id: `unmanaged_${ideSkill.id}`,
           name: ideSkill.name,
@@ -154,11 +164,7 @@ export function useLibraryWorkspace(options: UseLibraryWorkspaceOptions) {
           inRepo: false,
           skillScope: scope,
           displayPath: ideSkill.path,
-          unmanagedSources: [{
-            ide: ideSkill.ide,
-            scope,
-            path: ideSkill.path
-          }]
+          unmanagedSources: [sourceEntry]
         });
       }
     }
