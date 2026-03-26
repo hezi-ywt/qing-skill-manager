@@ -104,6 +104,7 @@ const {
   openVersionDiffModal,
   closeVersionDiffModal,
   librarySkills,
+  selectSkill,
   projects,
   selectedProjectId,
   loadProjects,
@@ -214,14 +215,18 @@ async function handleRegisterVersion(sourcePath: string) {
 }
 
 async function handleAdoptToRepo(path: string) {
+  // Extract skill name from path before import
+  const dirName = path.split("/").pop() || "";
   try {
     await invoke("import_local_skill", { request: { sourcePath: path } });
     await scanLocalSkills();
-    // Find the newly imported skill and load its package
-    const dirName = path.split("/").pop() || "";
+    // Find the newly imported skill, select it and load its package
     const newSkill = localSkills.value.find((s) => s.name === dirName || s.path.endsWith(`/${dirName}`));
-    if (newSkill?.currentVersion) {
-      void loadSkillPackage(newSkill.currentVersion.skillId || newSkill.id);
+    if (newSkill) {
+      selectSkill(newSkill.id);
+      if (newSkill.currentVersion) {
+        void loadSkillPackage(newSkill.currentVersion.skillId || newSkill.id);
+      }
     }
   } catch (err) {
     console.error("Failed to adopt skill:", err);
