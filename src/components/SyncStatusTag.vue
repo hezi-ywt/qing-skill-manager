@@ -21,6 +21,7 @@ const tagConfig = computed(() => {
       return { label: `${t("sync.synced")} · ${branch}`, color: "green" };
     case "outdated":
       return { label: `${t("sync.outdated")} · ${branch}`, color: "orange" };
+    case "modified":
     case "diverged":
       return { label: `${t("sync.diverged")} · ${branch}`, color: "blue" };
     case "conflict":

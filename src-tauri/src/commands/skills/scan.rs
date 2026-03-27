@@ -704,6 +704,27 @@ pub fn scan_project_skills(
     })
 }
 
+/// Validate that a project skill path is safe to use in sync operations.
+/// Checks:
+///   1. Path resolves to inside the home directory.
+///   2. Path is NOT inside ~/.qing-skill-manager/skills (central storage).
+///   3. Path contains a SKILL.md file (sanity check it's actually a skill).
+fn validate_project_skill_path(path: &Path, home: &Path) -> Result<(), String> {
+    let normalized = normalize_path(path);
+    let manager_root = normalize_path(&home.join(".qing-skill-manager/skills"));
+
+    if !normalized.starts_with(normalize_path(home)) {
+        return Err("Path is outside home directory".to_string());
+    }
+    if normalized.starts_with(&manager_root) {
+        return Err("Cannot sync a central skill — use a project installation".to_string());
+    }
+    if !path.join("SKILL.md").exists() {
+        return Err("Path does not contain a SKILL.md file".to_string());
+    }
+    Ok(())
+}
+
 /// Find the central skill directory by skill_id.
 /// First tries a direct path lookup (manager_root/<skill_id>),
 /// then falls back to scanning all directories and matching by skill_id.
@@ -738,6 +759,7 @@ pub fn sync_push(request: SyncPushRequest) -> Result<SyncPushResult, String> {
     if !project_skill_path.exists() {
         return Err("Project skill path does not exist".to_string());
     }
+    validate_project_skill_path(&project_skill_path, &home)?;
 
     // Read sidecar to find source_skill_id
     let sidecar = read_install_sidecar(&project_skill_path);
@@ -771,7 +793,7 @@ pub fn sync_push(request: SyncPushRequest) -> Result<SyncPushResult, String> {
         sync_branch: sidecar.sync_branch,
         git_source: sidecar.git_source,
     };
-    let _ = write_install_sidecar(&project_skill_path, &updated_sidecar);
+    write_install_sidecar(&project_skill_path, &updated_sidecar)?;
 
     Ok(SyncPushResult {
         success: true,
@@ -789,6 +811,7 @@ pub fn sync_pull(request: SyncPullRequest) -> Result<SyncPullResult, String> {
     if !project_skill_path.exists() {
         return Err("Project skill path does not exist".to_string());
     }
+    validate_project_skill_path(&project_skill_path, &home)?;
 
     // Read sidecar to find source_skill_id and preserve sync metadata
     let sidecar = read_install_sidecar(&project_skill_path);
@@ -801,10 +824,40 @@ pub fn sync_pull(request: SyncPullRequest) -> Result<SyncPullResult, String> {
     let central_dir = find_central_skill_dir(&manager_root, &skill_id)
         .ok_or_else(|| format!("Central skill directory not found for skill_id: {}", skill_id))?;
 
-    // Remove project directory and copy central to project
-    fs::remove_dir_all(&project_skill_path)
-        .map_err(|e| format!("Failed to remove project skill directory: {}", e))?;
-    crate::utils::download::copy_dir_recursive(&central_dir, &project_skill_path)?;
+    // Atomic restore: back up the project skill before replacing it.
+    // If copy fails, restore from backup to prevent data loss.
+    let backup_path = {
+        let mut p = project_skill_path.clone();
+        let mut name = p
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        name.push_str(".sync-backup");
+        p.set_file_name(name);
+        p
+    };
+    fs::rename(&project_skill_path, &backup_path).map_err(|e| {
+        format!("Failed to create backup of project skill before pull: {}", e)
+    })?;
+
+    match crate::utils::download::copy_dir_recursive(&central_dir, &project_skill_path) {
+        Ok(()) => {
+            // Copy succeeded — remove the backup
+            let _ = fs::remove_dir_all(&backup_path);
+        }
+        Err(err) => {
+            // Copy failed — restore from backup
+            let _ = fs::remove_dir_all(&project_skill_path); // clean partial copy
+            if let Err(restore_err) = fs::rename(&backup_path, &project_skill_path) {
+                return Err(format!(
+                    "Failed to restore project skill from backup after copy error: {}. Original error: {}",
+                    restore_err, err
+                ));
+            }
+            return Err(format!("Failed to pull central skill to project: {}", err));
+        }
+    }
 
     // Write updated sidecar with new content_hash, preserving sync_mode/sync_branch
     let new_version = build_skill_version(&central_dir, SkillVersionSource::Clone);
@@ -817,7 +870,7 @@ pub fn sync_pull(request: SyncPullRequest) -> Result<SyncPullResult, String> {
         sync_branch: sidecar.sync_branch,
         git_source: sidecar.git_source,
     };
-    let _ = write_install_sidecar(&project_skill_path, &updated_sidecar);
+    write_install_sidecar(&project_skill_path, &updated_sidecar)?;
 
     Ok(SyncPullResult {
         success: true,
@@ -827,10 +880,13 @@ pub fn sync_pull(request: SyncPullRequest) -> Result<SyncPullResult, String> {
 
 #[tauri::command]
 pub fn sync_detach(request: SyncDetachRequest) -> Result<SyncDetachResult, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+
     let project_skill_path = PathBuf::from(&request.project_skill_path);
     if !project_skill_path.exists() {
         return Err("Project skill path does not exist".to_string());
     }
+    validate_project_skill_path(&project_skill_path, &home)?;
 
     // Read existing sidecar, set sync_mode to "independent", clear sync_branch
     let sidecar = read_install_sidecar(&project_skill_path);
@@ -839,7 +895,7 @@ pub fn sync_detach(request: SyncDetachRequest) -> Result<SyncDetachResult, Strin
         sync_branch: None,
         ..sidecar
     };
-    let _ = write_install_sidecar(&project_skill_path, &updated_sidecar);
+    write_install_sidecar(&project_skill_path, &updated_sidecar)?;
 
     Ok(SyncDetachResult {
         success: true,

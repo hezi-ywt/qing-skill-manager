@@ -253,7 +253,7 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
           <div v-for="inst in globalInstallations" :key="inst.skillPath" class="install-entry">
             <div class="install-info">
               <span class="install-ide">{{ inst.ideLabel }}</span>
-              <span class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
+              <span v-if="inst.syncMode !== 'sync'" class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
               <SyncStatusTag
                 v-if="inst.syncMode === 'sync'"
                 :sync-status="inst.syncStatus"
