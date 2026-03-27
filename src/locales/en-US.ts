@@ -134,7 +134,13 @@ export default {
     installToIde: "Install to IDE",
     installToProject: "Install to Project",
     cloneToProject: "Deploy to Project",
-    cancel: "Cancel"
+    cancel: "Cancel",
+    syncOptions: "Sync Options",
+    syncMode: "Follow Updates",
+    independentMode: "Copy Only",
+    syncBranch: "Branch",
+    customBranch: "Custom...",
+    customBranchPlaceholder: "Enter branch name",
   },
   uninstallModal: {
     title: "Confirm uninstall",
@@ -580,5 +586,23 @@ export default {
       title: "Variants",
       version: "Version"
     }
-  }
+  },
+  sync: {
+    synced: "Synced",
+    outdated: "Update Available",
+    diverged: "Modified",
+    conflict: "Conflict",
+    independent: "Copy Only",
+    untracked: "Untracked",
+    unknown: "Unknown",
+    pushToCenter: "Push to Central",
+    pullLatest: "Pull Latest",
+    detach: "Stop Following",
+    pushConfirm: "Push local changes to central? Other projects following this branch will be notified.",
+    pullConfirm: "Pull latest version? Local changes will be overwritten.",
+    detachConfirm: "Stop following? This skill will become copy-only.",
+    pushSuccess: "Pushed to central",
+    pullSuccess: "Pulled latest version",
+    detachSuccess: "Stopped following",
+  },
 };

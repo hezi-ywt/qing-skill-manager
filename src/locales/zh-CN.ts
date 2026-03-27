@@ -134,7 +134,13 @@ export default {
     installToIde: "安装到 IDE",
     installToProject: "安装到项目",
     cloneToProject: "部署到项目",
-    cancel: "取消"
+    cancel: "取消",
+    syncOptions: "同步选项",
+    syncMode: "跟随更新",
+    independentMode: "仅复制",
+    syncBranch: "版本线",
+    customBranch: "自定义...",
+    customBranchPlaceholder: "输入版本线名称",
   },
   uninstallModal: {
     title: "确认卸载",
@@ -580,5 +586,23 @@ export default {
       title: "变体",
       version: "版本"
     }
-  }
+  },
+  sync: {
+    synced: "已同步",
+    outdated: "有更新",
+    diverged: "已修改",
+    conflict: "冲突",
+    independent: "仅复制",
+    untracked: "未追踪",
+    unknown: "未知",
+    pushToCenter: "更新到主库",
+    pullLatest: "获取最新版本",
+    detach: "停止跟随",
+    pushConfirm: "确定将本地修改更新到主库？其他跟随此分支的项目将收到更新通知。",
+    pullConfirm: "确定获取最新版本？本地修改将被覆盖。",
+    detachConfirm: "确定停止跟随？此 skill 将变为仅复制模式。",
+    pushSuccess: "已更新到主库",
+    pullSuccess: "已获取最新版本",
+    detachSuccess: "已停止跟随",
+  },
 };
