@@ -111,6 +111,8 @@ pub struct InstallRequest {
     pub skill_path: String,
     pub skill_name: String,
     pub install_targets: Vec<LinkTarget>,
+    pub sync_mode: Option<String>,
+    pub sync_branch: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -148,6 +150,8 @@ pub struct IdeSkill {
     pub content_hash: Option<String>,
     pub installed_hash: Option<String>,
     pub sync_status: String,
+    pub sync_mode: Option<String>,
+    pub sync_branch: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -466,6 +470,59 @@ pub enum DeleteStrategy {
     Archive,  // Move to archive directory
 }
 
+/// Sync status for installed skills (three-way hash comparison)
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncStatus {
+    Synced,
+    Outdated,
+    Diverged,
+    Conflict,
+    Independent,
+    Untracked,
+    Unknown,
+}
+
+/// Install mode selection
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallMode {
+    Sync,
+    Independent,
+}
+
+/// Structured diff change type
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChangeType {
+    Identical,
+    TitleOnly,
+    BodyChanged,
+    ResourceChanged,
+    MajorChange,
+}
+
+/// Git source tracking for marketplace skills
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct GitSource {
+    pub repo: String,
+    pub git_ref: String,
+    pub sha: String,
+}
+
+/// Structured diff result with three-layer comparison
+#[derive(Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct StructuredDiff {
+    pub change_type: ChangeType,
+    pub title_changed: bool,
+    pub body_changed: bool,
+    pub resources_changed: bool,
+    pub body_similarity: f64,
+    pub changed_files: Vec<String>,
+}
+
 // ============================================================================
 // Request/Response Types for Version Management Commands
 // ============================================================================
@@ -498,6 +555,48 @@ pub struct AppConfigResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SaveAppConfigRequest {
     pub default_version_strategy: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPushRequest {
+    pub project_skill_path: String,
+    pub skill_id: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPushResult {
+    pub success: bool,
+    pub message: String,
+    pub updated_projects: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPullRequest {
+    pub project_skill_path: String,
+    pub skill_id: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncPullResult {
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncDetachRequest {
+    pub project_skill_path: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncDetachResult {
+    pub success: bool,
+    pub message: String,
 }
 
 #[derive(Serialize, Debug)]

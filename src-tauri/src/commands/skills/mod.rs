@@ -722,6 +722,8 @@ pub(crate) fn collect_ide_skills(
             content_hash: Some(content_hash),
             installed_hash,
             sync_status,
+            sync_mode: None,
+            sync_branch: None,
         });
     }
 
@@ -767,6 +769,8 @@ pub(crate) fn collect_plugin_skills(base: &Path, ide_label: &str) -> Vec<IdeSkil
                 content_hash: None,
                 installed_hash: None,
                 sync_status: "unknown".to_string(),
+                sync_mode: None,
+                sync_branch: None,
             });
         }
     }

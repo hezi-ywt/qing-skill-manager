@@ -15,6 +15,9 @@ use commands::skills::{
 pub use crate::types::{
     AdoptIdeSkillRequest, AnalyzeConflictRequest, ConflictAnalysis, ConflictResolution,
     AppConfig, AppConfigResponse,
+    ChangeType, GitSource, InstallMode, StructuredDiff, SyncDetachRequest,
+    SyncDetachResult, SyncPullRequest, SyncPullResult, SyncPushRequest,
+    SyncPushResult, SyncStatus,
     CreateVariantRequest, CreateVariantResponse, CreateVersionRequest, CreateVersionResponse, DeleteLocalSkillRequest, DeleteVariantRequest,
     DeleteVersionRequest, DeleteVersionResponse, GetSkillPackageRequest, GetSkillPackageResponse,
     IdeDir, IdeSkill, ImportProjectSkillRequest, ImportRequest, InstallRequest, InstallResult,
