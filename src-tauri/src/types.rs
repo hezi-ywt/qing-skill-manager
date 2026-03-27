@@ -396,6 +396,7 @@ pub struct SkillDiff {
     pub content_diff: Option<String>, // Unified diff format
     pub metadata_changes: Vec<MetadataChange>,
     pub similarity_score: f64,        // 0.0 - 1.0
+    pub structured: Option<StructuredDiff>,
 }
 
 /// Metadata field change

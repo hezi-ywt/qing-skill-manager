@@ -1,6 +1,6 @@
 use crate::types::{
-    AppConfig, IdeSkill, LocalSkill, MetadataChange, SkillDiff, SkillPackage,
-    SkillVariant, SkillVersion, SkillVersionMetadata, SkillVersionSource,
+    AppConfig, ChangeType, IdeSkill, LocalSkill, MetadataChange, SkillDiff, SkillPackage,
+    SkillVariant, SkillVersion, SkillVersionMetadata, SkillVersionSource, StructuredDiff,
 };
 use crate::utils::path::sanitize_dir_name;
 use serde::{Deserialize, Serialize};
@@ -467,10 +467,57 @@ pub(crate) fn build_skill_diff(base: &SkillVersion, incoming: &SkillVersion) -> 
         0.25
     };
 
+    // Structured diff: three-layer comparison (title / body / resources)
+    let title_changed = base.metadata.name != incoming.metadata.name;
+    let body_changed = base.metadata.description != incoming.metadata.description
+        || base.metadata.author != incoming.metadata.author
+        || base.version != incoming.version;
+    // resources_changed: non-SKILL.md files changed — detected when content_hash differs
+    // but body and title are the same (meaning the body content is identical but other
+    // resources changed). When body has changed the hash will differ too, so we only
+    // flag resources_changed when neither title nor body has changed but hashes differ.
+    let resources_changed = !title_changed && !body_changed && base.content_hash != incoming.content_hash;
+
+    let change_type = if !title_changed && !body_changed && !resources_changed {
+        ChangeType::Identical
+    } else if title_changed && !body_changed && !resources_changed {
+        ChangeType::TitleOnly
+    } else if body_changed && !resources_changed {
+        ChangeType::BodyChanged
+    } else if resources_changed && !body_changed {
+        ChangeType::ResourceChanged
+    } else {
+        ChangeType::MajorChange
+    };
+
+    let mut changed_files: Vec<String> = Vec::new();
+    if title_changed || body_changed {
+        changed_files.push("SKILL.md".to_string());
+    }
+    if resources_changed {
+        changed_files.push("<resources>".to_string());
+    }
+    if changed_files.is_empty() {
+        // Identical — no files changed
+    }
+
+    let structured_diff = StructuredDiff {
+        change_type,
+        title_changed,
+        body_changed,
+        resources_changed,
+        body_similarity: similarity_score,
+        changed_files: changed_files.clone(),
+    };
+
     SkillDiff {
         from_version: base.id.clone(),
         to_version: incoming.id.clone(),
-        files_changed: vec!["SKILL.md".to_string()],
+        files_changed: if changed_files.is_empty() {
+            vec!["SKILL.md".to_string()]
+        } else {
+            changed_files
+        },
         additions: incoming.metadata.description.lines().count(),
         deletions: base.metadata.description.lines().count(),
         content_diff: Some(format!(
@@ -482,6 +529,7 @@ pub(crate) fn build_skill_diff(base: &SkillVersion, incoming: &SkillVersion) -> 
         )),
         metadata_changes,
         similarity_score,
+        structured: Some(structured_diff),
     }
 }
 
@@ -2446,5 +2494,50 @@ mod tests {
         let fields: Vec<&str> = diff.metadata_changes.iter().map(|c| c.field.as_str()).collect();
         assert!(fields.contains(&"description"));
         assert!(fields.contains(&"version"));
+    }
+
+    #[test]
+    fn test_structured_diff_title_only() {
+        // Create two SkillVersions where only the name differs
+        let mut base = fixture_version("Same description", "1.0.0", "same_hash");
+        let mut incoming = fixture_version("Same description", "1.0.0", "same_hash");
+        base.metadata.name = "SkillA".to_string();
+        incoming.metadata.name = "SkillB".to_string();
+
+        let diff = build_skill_diff(&base, &incoming);
+
+        let structured = diff.structured.expect("structured diff should be present");
+        assert_eq!(structured.change_type, ChangeType::TitleOnly);
+        assert!(structured.title_changed, "title_changed should be true");
+        assert!(!structured.body_changed, "body_changed should be false");
+        assert!(!structured.resources_changed, "resources_changed should be false");
+    }
+
+    #[test]
+    fn test_structured_diff_identical() {
+        let base = fixture_version("Same description", "1.0.0", "same_hash");
+        let incoming = fixture_version("Same description", "1.0.0", "same_hash");
+
+        let diff = build_skill_diff(&base, &incoming);
+
+        let structured = diff.structured.expect("structured diff should be present");
+        assert_eq!(structured.change_type, ChangeType::Identical);
+        assert!(!structured.title_changed);
+        assert!(!structured.body_changed);
+        assert!(!structured.resources_changed);
+    }
+
+    #[test]
+    fn test_structured_diff_body_changed() {
+        let base = fixture_version("Old description", "1.0.0", "hash_a");
+        let incoming = fixture_version("New description", "2.0.0", "hash_b");
+
+        let diff = build_skill_diff(&base, &incoming);
+
+        let structured = diff.structured.expect("structured diff should be present");
+        assert_eq!(structured.change_type, ChangeType::BodyChanged);
+        assert!(!structured.title_changed);
+        assert!(structured.body_changed);
+        assert!(!structured.resources_changed);
     }
 }
