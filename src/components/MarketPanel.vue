@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import type { RemoteSkill, MarketStatus, DownloadTask, MarketSortMode } from "../composables/types";
+import type { RemoteSkill, MarketStatus, DownloadTask } from "../composables/types";
 import { useI18n } from "vue-i18n";
 import { ref, computed } from "vue";
 import MarketSettingsModal from "./MarketSettingsModal.vue";
-import { normalizeSkillName } from "../composables/utils";
+import ManualAddSkillModal from "./ManualAddSkillModal.vue";
 
 const { t } = useI18n();
 
 const props = defineProps<{
   query: string;
-  sortMode: MarketSortMode;
   loading: boolean;
   results: RemoteSkill[];
   hasMore: boolean;
@@ -25,20 +24,20 @@ const props = defineProps<{
 
 const downloadingIds = computed(() => new Set(props.downloadQueue.map(t => t.id)));
 const actionState = (skill: RemoteSkill) => props.recentTaskStatus[skill.id] ?? null;
-const isInstalled = (skill: RemoteSkill) => props.localSkillNameSet.has(normalizeSkillName(skill.name));
 
 defineEmits<{
   (e: "update:query", value: string): void;
-  (e: "update:sortMode", value: MarketSortMode): void;
   (e: "search"): void;
   (e: "refresh"): void;
   (e: "loadMore"): void;
   (e: "download", skill: RemoteSkill): void;
   (e: "update", skill: RemoteSkill): void;
+  (e: "manualAdd", payload: { sourceUrl: string; name: string }): void;
   (e: "saveConfigs", configs: Record<string, string>, enabled: Record<string, boolean>): void;
 }>();
 
 const showSettings = ref(false);
+const showManualAdd = ref(false);
 </script>
 
 <template>
@@ -65,21 +64,9 @@ const showSettings = ref(false);
       <button class="ghost" :disabled="loading" @click="$emit('refresh')">
         {{ loading ? t("market.refreshing") : t("market.refresh") }}
       </button>
-    </div>
-    <div class="market-toolbar">
-      <label class="sort-control">
-        <span>{{ t("market.sortLabel") }}</span>
-        <select
-          class="input sort-select"
-          :value="sortMode"
-          @change="$emit('update:sortMode', ($event.target as HTMLSelectElement).value as MarketSortMode)"
-        >
-          <option value="default">{{ t("market.sortDefault") }}</option>
-          <option value="stars_desc">{{ t("market.sortStars") }}</option>
-          <option value="installs_desc">{{ t("market.sortInstalls") }}</option>
-        </select>
-      </label>
-      <div class="hint">{{ t("market.sortHint") }}</div>
+      <button class="ghost" :disabled="loading" @click="showManualAdd = true">
+        {{ t("market.manualAdd") }}
+      </button>
     </div>
 
   </section>
@@ -98,7 +85,7 @@ const showSettings = ref(false);
               {{ t("market.meta", { author: skill.author, stars: skill.stars, installs: skill.installs }) }}
             </div>
           </div>
-          <template v-if="isInstalled(skill)">
+          <template v-if="localSkillNameSet.has(skill.name.trim().toLowerCase())">
             <button class="ghost" :disabled="downloadingIds.has(skill.id) || actionState(skill) === 'update' || !skill.sourceUrl || !skill.sourceUrl.trim()" :title="(!skill.sourceUrl || !skill.sourceUrl.trim()) ? t('market.unavailable') : ''" @click="$emit('update', skill)">
               {{
                 (!skill.sourceUrl || !skill.sourceUrl.trim())
@@ -151,6 +138,12 @@ const showSettings = ref(false);
     @close="showSettings = false"
     @save="(configs, enabled) => $emit('saveConfigs', configs, enabled)"
   />
+
+  <ManualAddSkillModal
+    :show="showManualAdd"
+    @close="showManualAdd = false"
+    @submit="$emit('manualAdd', $event)"
+  />
 </template>
 
 <style scoped>
@@ -166,26 +159,5 @@ const showSettings = ref(false);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.market-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-  flex-wrap: wrap;
-}
-
-.sort-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-muted);
-  font-size: 13px;
-}
-
-.sort-select {
-  min-width: 180px;
 }
 </style>
