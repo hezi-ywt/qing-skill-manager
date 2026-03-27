@@ -17,7 +17,6 @@ import LoadingOverlay from "./components/LoadingOverlay.vue";
 import Toast from "./components/Toast.vue";
 import ProjectAddModal from "./components/ProjectAddModal.vue";
 import ProjectConfigModal from "./components/ProjectConfigModal.vue";
-import type { MarketSortMode } from "./composables/types";
 
 const { t } = useI18n();
 
@@ -73,9 +72,8 @@ watch(theme, (next) => {
 const {
   activeTab,
   query,
-  sortedResults,
+  results,
   loading,
-  marketSortMode,
   installingId,
   updatingId,
   localSkills,
@@ -97,6 +95,7 @@ const {
   searchMarketplace,
   downloadSkill,
   updateSkill,
+  addManualSkill,
   scanLocalSkills,
   openInstallModal,
   addCustomIde,
@@ -299,9 +298,8 @@ async function handleLinkSkills(projectId: string) {
       <template v-else-if="activeTab === 'market'">
         <MarketPanel
           v-model:query="query"
-          :sort-mode="marketSortMode"
           :loading="loading"
-          :results="sortedResults"
+          :results="results"
           :has-more="hasMore"
           :installing-id="installingId"
           :updating-id="updatingId"
@@ -311,12 +309,12 @@ async function handleLinkSkills(projectId: string) {
           :enabled-markets="enabledMarkets"
           :download-queue="downloadQueue"
           :recent-task-status="recentTaskStatus"
-          @update:sort-mode="marketSortMode = $event as MarketSortMode"
           @search="searchMarketplace(true)"
           @refresh="searchMarketplace(true, true)"
           @loadMore="searchMarketplace(false)"
           @download="downloadSkill"
           @update="updateSkill"
+          @manual-add="({ sourceUrl, name }) => addManualSkill(sourceUrl, name)"
           @saveConfigs="saveMarketConfigs"
         />
       </template>
