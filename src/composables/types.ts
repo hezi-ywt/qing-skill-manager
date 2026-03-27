@@ -62,7 +62,9 @@ export type IdeSkill = {
   versionId: string | null;
   contentHash: string | null;
   installedHash: string | null;
-  syncStatus: "synced" | "modified" | "untracked" | "unknown";
+  syncStatus: "synced" | "modified" | "untracked" | "unknown" | "outdated" | "diverged" | "conflict" | "independent";
+  syncMode: "sync" | "independent" | null;
+  syncBranch: string | null;
 };
 
 /**
@@ -264,6 +266,37 @@ export type SkillPackageSummary = {
 };
 
 /**
+ * Structured diff change type
+ */
+export type ChangeType =
+  | "identical"
+  | "title_only"
+  | "body_changed"
+  | "resource_changed"
+  | "major_change";
+
+/**
+ * Structured diff result with three-layer comparison
+ */
+export type StructuredDiff = {
+  changeType: ChangeType;
+  titleChanged: boolean;
+  bodyChanged: boolean;
+  resourcesChanged: boolean;
+  bodySimilarity: number;
+  changedFiles: string[];
+};
+
+/**
+ * Git source tracking for marketplace skills
+ */
+export type GitSource = {
+  repo: string;
+  gitRef: string;
+  sha: string;
+};
+
+/**
  * Content difference between two versions
  */
 export type SkillDiff = {
@@ -275,6 +308,7 @@ export type SkillDiff = {
   contentDiff?: string;
   metadataChanges: MetadataChange[];
   similarityScore: number;
+  structured?: StructuredDiff;
 };
 
 /**
@@ -491,7 +525,9 @@ export type LibraryIdeInstallation = {
   versionId: string | null;
   isManaged: boolean;
   scope: "global" | "project" | "plugin";
-  syncStatus: "synced" | "modified" | "untracked" | "unknown";
+  syncStatus: "synced" | "modified" | "untracked" | "unknown" | "outdated" | "diverged" | "conflict" | "independent";
+  syncMode: "sync" | "independent" | null;
+  syncBranch: string | null;
 };
 
 /**

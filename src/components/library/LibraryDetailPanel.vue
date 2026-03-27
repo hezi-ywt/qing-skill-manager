@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { IdeOption, LibrarySkill, LocalSkill, ProjectConfig } from "../../composables/types";
+import { invoke } from "@tauri-apps/api/core";
+import SyncStatusTag from "../SyncStatusTag.vue";
+import type { IdeOption, LibraryIdeInstallation, LibrarySkill, LocalSkill, ProjectConfig } from "../../composables/types";
 
 const { t } = useI18n();
 
@@ -14,13 +16,14 @@ const props = defineProps<{
   projects: ProjectConfig[];
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   (e: "install", skill: LocalSkill): void;
   (e: "cloneToProject", projectId: string): void;
   (e: "openDir", path: string): void;
   (e: "delete", skill: LocalSkill): void;
   (e: "adoptToRepo", path: string): void;
   (e: "uninstallSkill", path: string): void;
+  (e: "refresh"): void;
 }>();
 
 const isInstalling = computed<boolean>(() => {
@@ -40,7 +43,7 @@ const globalInstallations = computed(() => {
     .map((s) => ({
       ideId: s.ide, ideLabel: s.label, skillPath: s.path,
       versionId: null, isManaged: false, scope: "global" as const,
-      syncStatus: "unknown" as const
+      syncStatus: "unknown" as const, syncMode: null, syncBranch: null
     }));
 });
 
@@ -54,7 +57,7 @@ const projectInstallations = computed(() =>
     .map((s) => ({
       ideId: s.ide, ideLabel: s.label, skillPath: s.path,
       versionId: null, isManaged: false, scope: "project" as const,
-      syncStatus: "unknown" as const
+      syncStatus: "unknown" as const, syncMode: null, syncBranch: null
     }))
 );
 
@@ -121,6 +124,57 @@ function getMappingDescription(status: string): string {
   if (status === "modified") return t("library.mappingDescModified");
   return t("library.mappingDescMissing");
 }
+
+async function handleSyncPush(inst: LibraryIdeInstallation): Promise<void> {
+  if (!props.skill) return;
+  if (!confirm(t("sync.pushConfirm"))) return;
+  try {
+    await invoke("sync_push", {
+      request: {
+        projectSkillPath: inst.skillPath,
+        skillId: props.skill.id,
+      },
+    });
+    emit("refresh");
+  } catch (e) {
+    console.error("sync_push failed:", e);
+  }
+}
+
+async function handleSyncPull(inst: LibraryIdeInstallation): Promise<void> {
+  if (!props.skill) return;
+  if (!confirm(t("sync.pullConfirm"))) return;
+  try {
+    await invoke("sync_pull", {
+      request: {
+        projectSkillPath: inst.skillPath,
+        skillId: props.skill.id,
+      },
+    });
+    emit("refresh");
+  } catch (e) {
+    console.error("sync_pull failed:", e);
+  }
+}
+
+async function handleSyncDetach(inst: LibraryIdeInstallation): Promise<void> {
+  if (!confirm(t("sync.detachConfirm"))) return;
+  try {
+    await invoke("sync_detach", {
+      request: {
+        projectSkillPath: inst.skillPath,
+      },
+    });
+    emit("refresh");
+  } catch (e) {
+    console.error("sync_detach failed:", e);
+  }
+}
+
+// The overall sync status for the skill header tag: take the first sync-mode installation
+const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
+  props.librarySkill?.installations.find((i) => i.syncMode === "sync") ?? null
+);
 </script>
 
 <template>
@@ -144,6 +198,12 @@ function getMappingDescription(status: string): string {
               <span v-if="skill.currentVersion" class="version-chip">{{ skill.currentVersion.displayName }}</span>
               <span class="version-meta-text">{{ t("library.detail.versionCount", { count: skill.versionCount }) }}</span>
               <span class="version-meta-text">{{ t("library.usedInProjects", { count: librarySkill.usedByProjectIds.length }) }}</span>
+              <SyncStatusTag
+                v-if="primarySyncInstallation"
+                :sync-status="primarySyncInstallation.syncStatus"
+                :sync-mode="primarySyncInstallation.syncMode"
+                :sync-branch="primarySyncInstallation.syncBranch"
+              />
             </template>
             <template v-else>
               <span class="status-badge unmanaged">{{ t("library.status.unmanaged") }}</span>
@@ -193,9 +253,31 @@ function getMappingDescription(status: string): string {
           <div v-for="inst in globalInstallations" :key="inst.skillPath" class="install-entry">
             <div class="install-info">
               <span class="install-ide">{{ inst.ideLabel }}</span>
-              <span class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
+              <span v-if="inst.syncMode !== 'sync'" class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
+              <SyncStatusTag
+                v-if="inst.syncMode === 'sync'"
+                :sync-status="inst.syncStatus"
+                :sync-mode="inst.syncMode"
+                :sync-branch="inst.syncBranch"
+              />
             </div>
             <div class="install-actions">
+              <template v-if="inst.syncMode === 'sync'">
+                <button
+                  v-if="inst.syncStatus === 'diverged'"
+                  class="ghost btn-xs"
+                  @click="handleSyncPush(inst)"
+                >{{ t("sync.pushToCenter") }}</button>
+                <button
+                  v-if="inst.syncStatus === 'outdated' || inst.syncStatus === 'conflict'"
+                  class="ghost btn-xs"
+                  @click="handleSyncPull(inst)"
+                >{{ t("sync.pullLatest") }}</button>
+                <button
+                  class="ghost btn-xs"
+                  @click="handleSyncDetach(inst)"
+                >{{ t("sync.detach") }}</button>
+              </template>
               <button class="ghost btn-xs" @click="$emit('openDir', inst.skillPath)">{{ t("ide.openDir") }}</button>
               <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', inst.skillPath)">{{ t("ide.uninstall") }}</button>
             </div>

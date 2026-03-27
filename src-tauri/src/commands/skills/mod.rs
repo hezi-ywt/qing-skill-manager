@@ -1,6 +1,6 @@
 use crate::types::{
-    AppConfig, IdeSkill, LocalSkill, MetadataChange, SkillDiff, SkillPackage,
-    SkillVariant, SkillVersion, SkillVersionMetadata, SkillVersionSource,
+    AppConfig, ChangeType, IdeSkill, LocalSkill, MetadataChange, SkillDiff, SkillPackage,
+    SkillVariant, SkillVersion, SkillVersionMetadata, SkillVersionSource, StructuredDiff,
 };
 use crate::utils::path::sanitize_dir_name;
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,9 @@ pub use scan::uninstall_skill;
 pub use scan::scan_project_ide_dirs;
 pub use scan::scan_project_opencode_skills;
 pub use scan::scan_project_skills;
+pub use scan::sync_push;
+pub use scan::sync_pull;
+pub use scan::sync_detach;
 pub use version::compare_skill_versions;
 pub use version::create_skill_version;
 pub use version::delete_skill_version;
@@ -78,6 +81,18 @@ pub(crate) struct InstalledSkillSidecar {
     pub content_hash: Option<String>,
     pub installed_at: Option<i64>,
     pub source_skill_id: Option<String>,
+    pub sync_mode: Option<String>,       // "sync" | "independent"
+    pub sync_branch: Option<String>,     // "main" | "dev" | custom name
+    pub git_source: Option<GitSourceSidecar>,
+}
+
+/// Git source tracking (stored in sidecar)
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GitSourceSidecar {
+    pub repo: Option<String>,
+    pub git_ref: Option<String>,
+    pub sha: Option<String>,
 }
 
 pub(crate) fn read_install_sidecar(skill_dir: &Path) -> InstalledSkillSidecar {
@@ -452,10 +467,57 @@ pub(crate) fn build_skill_diff(base: &SkillVersion, incoming: &SkillVersion) -> 
         0.25
     };
 
+    // Structured diff: three-layer comparison (title / body / resources)
+    let title_changed = base.metadata.name != incoming.metadata.name;
+    let body_changed = base.metadata.description != incoming.metadata.description
+        || base.metadata.author != incoming.metadata.author
+        || base.version != incoming.version;
+    // resources_changed: non-SKILL.md files changed — detected when content_hash differs
+    // but body and title are the same (meaning the body content is identical but other
+    // resources changed). When body has changed the hash will differ too, so we only
+    // flag resources_changed when neither title nor body has changed but hashes differ.
+    let resources_changed = !title_changed && !body_changed && base.content_hash != incoming.content_hash;
+
+    let change_type = if !title_changed && !body_changed && !resources_changed {
+        ChangeType::Identical
+    } else if title_changed && !body_changed && !resources_changed {
+        ChangeType::TitleOnly
+    } else if body_changed && !resources_changed {
+        ChangeType::BodyChanged
+    } else if resources_changed && !body_changed {
+        ChangeType::ResourceChanged
+    } else {
+        ChangeType::MajorChange
+    };
+
+    let mut changed_files: Vec<String> = Vec::new();
+    if title_changed || body_changed {
+        changed_files.push("SKILL.md".to_string());
+    }
+    if resources_changed {
+        changed_files.push("<resources>".to_string());
+    }
+    if changed_files.is_empty() {
+        // Identical — no files changed
+    }
+
+    let structured_diff = StructuredDiff {
+        change_type,
+        title_changed,
+        body_changed,
+        resources_changed,
+        body_similarity: similarity_score,
+        changed_files: changed_files.clone(),
+    };
+
     SkillDiff {
         from_version: base.id.clone(),
         to_version: incoming.id.clone(),
-        files_changed: vec!["SKILL.md".to_string()],
+        files_changed: if changed_files.is_empty() {
+            vec!["SKILL.md".to_string()]
+        } else {
+            changed_files
+        },
         additions: incoming.metadata.description.lines().count(),
         deletions: base.metadata.description.lines().count(),
         content_diff: Some(format!(
@@ -467,6 +529,7 @@ pub(crate) fn build_skill_diff(base: &SkillVersion, incoming: &SkillVersion) -> 
         )),
         metadata_changes,
         similarity_score,
+        structured: Some(structured_diff),
     }
 }
 
@@ -638,6 +701,20 @@ pub(crate) fn collect_ide_skills(
         return skills;
     }
 
+    // Build a lookup from skill_id → current central content hash
+    // so we can do three-way comparison (central vs installed-at vs current)
+    let mut central_hash_by_id: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    for (central_hash, idx) in manager_map {
+        if let Some(skill) = manager_skills.get(*idx) {
+            if let Some(ref v) = skill.current_version {
+                central_hash_by_id
+                    .entry(v.skill_id.clone())
+                    .or_insert_with(|| central_hash.clone());
+            }
+        }
+    }
+
     let entries = match fs::read_dir(base) {
         Ok(entries) => entries,
         Err(_) => return skills,
@@ -686,13 +763,44 @@ pub(crate) fn collect_ide_skills(
 
         let (version_id, installed_hash, sync_status) = if has_sidecar {
             let installed_h = sidecar.content_hash.clone();
-            if installed_h.as_deref() == Some(&content_hash) {
-                // Content unchanged since install → synced
-                (sidecar.version_id.clone(), installed_h, "synced".to_string())
+            let sidecar_sync_mode = sidecar.sync_mode.as_deref().unwrap_or("sync");
+
+            if sidecar_sync_mode == "independent" {
+                // Independent mode: skip comparison entirely
+                managed = true;
+                (sidecar.version_id.clone(), installed_h, "independent".to_string())
+            } else if let Some(ref source_id) = sidecar.source_skill_id {
+                // Three-way comparison: central vs installed-at vs current
+                if let Some(central_hash) = central_hash_by_id.get(source_id) {
+                    managed = true;
+                    let installed_at_hash = installed_h.as_deref().unwrap_or("");
+                    let central_eq_installed = central_hash == installed_at_hash;
+                    let installed_eq_current = installed_at_hash == content_hash;
+
+                    let status = match (central_eq_installed, installed_eq_current) {
+                        (true, true) => "synced",      // all three match
+                        (false, true) => "outdated",   // central updated, local unchanged
+                        (true, false) => "diverged",   // local modified, central unchanged
+                        (false, false) => "conflict",  // both changed
+                    };
+                    (sidecar.version_id.clone(), installed_h, status.to_string())
+                } else {
+                    // source_skill_id set but central skill not found — fall back to two-way
+                    if installed_h.as_deref() == Some(&content_hash) {
+                        (sidecar.version_id.clone(), installed_h, "synced".to_string())
+                    } else {
+                        managed = true;
+                        (sidecar.version_id.clone(), installed_h, "modified".to_string())
+                    }
+                }
             } else {
-                // Content changed since install → modified
-                managed = true; // was installed by us
-                (sidecar.version_id.clone(), installed_h, "modified".to_string())
+                // No source_skill_id — legacy sidecar, use two-way comparison
+                if installed_h.as_deref() == Some(&content_hash) {
+                    (sidecar.version_id.clone(), installed_h, "synced".to_string())
+                } else {
+                    managed = true; // was installed by us
+                    (sidecar.version_id.clone(), installed_h, "modified".to_string())
+                }
             }
         } else if managed {
             // No sidecar but hash matches manager → legacy install
@@ -722,6 +830,8 @@ pub(crate) fn collect_ide_skills(
             content_hash: Some(content_hash),
             installed_hash,
             sync_status,
+            sync_mode: sidecar.sync_mode.clone(),
+            sync_branch: sidecar.sync_branch.clone(),
         });
     }
 
@@ -767,6 +877,8 @@ pub(crate) fn collect_plugin_skills(base: &Path, ide_label: &str) -> Vec<IdeSkil
                 content_hash: None,
                 installed_hash: None,
                 sync_status: "unknown".to_string(),
+                sync_mode: None,
+                sync_branch: None,
             });
         }
     }
@@ -1121,6 +1233,8 @@ mod tests {
                 name: "Test IDE".to_string(),
                 path: target_root.display().to_string(),
             }],
+            sync_mode: None,
+            sync_branch: None,
         })
         .expect("clone succeeds");
 
@@ -1156,6 +1270,8 @@ mod tests {
                 name: "Invalid IDE".to_string(),
                 path: "/tmp/skills-manager-invalid-target".to_string(),
             }],
+            sync_mode: None,
+            sync_branch: None,
         });
 
         assert!(result.is_err());
@@ -1452,6 +1568,7 @@ mod tests {
             content_hash: Some("abc1234567890def".to_string()),
             installed_at: Some(1700000000),
             source_skill_id: Some("my-skill_default".to_string()),
+            ..Default::default()
         };
         write_install_sidecar(&temp, &original).expect("write sidecar");
 
@@ -1601,6 +1718,7 @@ mod tests {
             content_hash: Some(hash.clone()),
             installed_at: Some(1700000000),
             source_skill_id: None,
+            ..Default::default()
         }).expect("write sidecar");
 
         let manager_hash = skill_content_hash(&manager_dir);
@@ -1647,6 +1765,7 @@ mod tests {
             content_hash: Some("old_hash_not_matching".to_string()),
             installed_at: Some(1700000000),
             source_skill_id: None,
+            ..Default::default()
         }).expect("write sidecar");
 
         let manager_map: Vec<(String, usize)> = vec![];
@@ -1730,6 +1849,335 @@ mod tests {
         assert_eq!(skill.sync_status, "unknown");
         assert!(!skill.managed);
         assert_eq!(skill.source, "local");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    // ========================================================================
+    // P1: Three-way sync status detection
+    // ========================================================================
+
+    #[test]
+    fn collect_ide_skills_three_way_synced() {
+        // central == installed-at == current → synced
+        let unique = unique_test_name("3way-synced");
+        let root = std::env::temp_dir().join(&unique);
+        let manager_root = root.join("manager");
+        let ide_root = root.join("ide");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        fs::create_dir_all(&ide_root).expect("create ide root");
+
+        let content = "---\nname: ThreeWay Synced\nversion: 1.0.0\n---\nSame content\n";
+        let manager_dir = write_skill_dir(&manager_root, "tw-skill", content);
+        let ide_dir = write_skill_dir(&ide_root, "tw-skill", content);
+
+        let hash = skill_content_hash(&ide_dir);
+        write_install_sidecar(&ide_dir, &InstalledSkillSidecar {
+            version_id: Some("v1".to_string()),
+            content_hash: Some(hash.clone()),
+            installed_at: Some(1700000000),
+            source_skill_id: Some("tw-skill_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: Some("main".to_string()),
+            ..Default::default()
+        }).expect("write sidecar");
+
+        let manager_hash = skill_content_hash(&manager_dir);
+        let mut manager_skills = vec![LocalSkill {
+            id: manager_dir.display().to_string(),
+            name: "ThreeWay Synced".to_string(),
+            description: "".to_string(),
+            path: manager_dir.display().to_string(),
+            source: "manager".to_string(),
+            ide: None,
+            used_by: Vec::new(),
+            version_count: 1,
+            current_version: Some(SkillVersion {
+                id: "v1".to_string(),
+                skill_id: "tw-skill_default".to_string(),
+                version: "1.0.0".to_string(),
+                display_name: "1.0.0".to_string(),
+                content_hash: manager_hash.clone(),
+                created_at: 1700000000,
+                source: SkillVersionSource::Clone,
+                source_url: None,
+                parent_version: None,
+                is_active: true,
+                metadata: SkillVersionMetadata {
+                    name: "ThreeWay Synced".to_string(),
+                    description: "".to_string(),
+                    author: None,
+                    namespace: None,
+                },
+            }),
+        }];
+        let manager_map = vec![(manager_hash, 0usize)];
+        let version_hash_map = std::collections::HashMap::new();
+
+        let ide_skills = collect_ide_skills(
+            &ide_root, "TestIDE", "global", &manager_map, &mut manager_skills, &version_hash_map,
+        );
+
+        let skill = ide_skills.iter().find(|s| s.name == "ThreeWay Synced").expect("found");
+        assert_eq!(skill.sync_status, "synced");
+        assert_eq!(skill.sync_mode.as_deref(), Some("sync"));
+        assert_eq!(skill.sync_branch.as_deref(), Some("main"));
+        assert!(skill.managed);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn collect_ide_skills_three_way_outdated() {
+        // central != installed-at AND installed-at == current → outdated
+        let unique = unique_test_name("3way-outdated");
+        let root = std::env::temp_dir().join(&unique);
+        let manager_root = root.join("manager");
+        let ide_root = root.join("ide");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        fs::create_dir_all(&ide_root).expect("create ide root");
+
+        let original = "---\nname: ThreeWay Outdated\nversion: 1.0.0\n---\nOriginal\n";
+        let updated = "---\nname: ThreeWay Outdated\nversion: 2.0.0\n---\nUpdated central\n";
+        // Central has been updated
+        let manager_dir = write_skill_dir(&manager_root, "tw-outdated", updated);
+        // IDE still has original
+        let ide_dir = write_skill_dir(&ide_root, "tw-outdated", original);
+
+        let installed_hash = skill_content_hash(&ide_dir); // same as original
+        write_install_sidecar(&ide_dir, &InstalledSkillSidecar {
+            version_id: Some("v1".to_string()),
+            content_hash: Some(installed_hash.clone()),
+            installed_at: Some(1700000000),
+            source_skill_id: Some("tw-outdated_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: None,
+            ..Default::default()
+        }).expect("write sidecar");
+
+        let manager_hash = skill_content_hash(&manager_dir);
+        let mut manager_skills = vec![LocalSkill {
+            id: manager_dir.display().to_string(),
+            name: "ThreeWay Outdated".to_string(),
+            description: "".to_string(),
+            path: manager_dir.display().to_string(),
+            source: "manager".to_string(),
+            ide: None,
+            used_by: Vec::new(),
+            version_count: 1,
+            current_version: Some(SkillVersion {
+                id: "v2".to_string(),
+                skill_id: "tw-outdated_default".to_string(),
+                version: "2.0.0".to_string(),
+                display_name: "2.0.0".to_string(),
+                content_hash: manager_hash.clone(),
+                created_at: 1700000000,
+                source: SkillVersionSource::Clone,
+                source_url: None,
+                parent_version: None,
+                is_active: true,
+                metadata: SkillVersionMetadata {
+                    name: "ThreeWay Outdated".to_string(),
+                    description: "".to_string(),
+                    author: None,
+                    namespace: None,
+                },
+            }),
+        }];
+        let manager_map = vec![(manager_hash, 0usize)];
+        let version_hash_map = std::collections::HashMap::new();
+
+        let ide_skills = collect_ide_skills(
+            &ide_root, "TestIDE", "global", &manager_map, &mut manager_skills, &version_hash_map,
+        );
+
+        let skill = ide_skills.iter().find(|s| s.name == "ThreeWay Outdated").expect("found");
+        assert_eq!(skill.sync_status, "outdated");
+        assert!(skill.managed);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn collect_ide_skills_three_way_diverged() {
+        // central == installed-at AND installed-at != current → diverged
+        let unique = unique_test_name("3way-diverged");
+        let root = std::env::temp_dir().join(&unique);
+        let manager_root = root.join("manager");
+        let ide_root = root.join("ide");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        fs::create_dir_all(&ide_root).expect("create ide root");
+
+        let original = "---\nname: ThreeWay Diverged\nversion: 1.0.0\n---\nOriginal\n";
+        let locally_modified = "---\nname: ThreeWay Diverged\nversion: 1.0.0\n---\nLocally modified\n";
+        // Central unchanged from original
+        let manager_dir = write_skill_dir(&manager_root, "tw-diverged", original);
+        // IDE has local modifications
+        let ide_dir = write_skill_dir(&ide_root, "tw-diverged", locally_modified);
+
+        // installed-at hash = original content hash (= central hash)
+        let original_hash = skill_content_hash(&manager_dir);
+        write_install_sidecar(&ide_dir, &InstalledSkillSidecar {
+            version_id: Some("v1".to_string()),
+            content_hash: Some(original_hash.clone()),
+            installed_at: Some(1700000000),
+            source_skill_id: Some("tw-diverged_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: None,
+            ..Default::default()
+        }).expect("write sidecar");
+
+        let manager_hash = skill_content_hash(&manager_dir);
+        let mut manager_skills = vec![LocalSkill {
+            id: manager_dir.display().to_string(),
+            name: "ThreeWay Diverged".to_string(),
+            description: "".to_string(),
+            path: manager_dir.display().to_string(),
+            source: "manager".to_string(),
+            ide: None,
+            used_by: Vec::new(),
+            version_count: 1,
+            current_version: Some(SkillVersion {
+                id: "v1".to_string(),
+                skill_id: "tw-diverged_default".to_string(),
+                version: "1.0.0".to_string(),
+                display_name: "1.0.0".to_string(),
+                content_hash: manager_hash.clone(),
+                created_at: 1700000000,
+                source: SkillVersionSource::Clone,
+                source_url: None,
+                parent_version: None,
+                is_active: true,
+                metadata: SkillVersionMetadata {
+                    name: "ThreeWay Diverged".to_string(),
+                    description: "".to_string(),
+                    author: None,
+                    namespace: None,
+                },
+            }),
+        }];
+        let manager_map = vec![(manager_hash, 0usize)];
+        let version_hash_map = std::collections::HashMap::new();
+
+        let ide_skills = collect_ide_skills(
+            &ide_root, "TestIDE", "global", &manager_map, &mut manager_skills, &version_hash_map,
+        );
+
+        let skill = ide_skills.iter().find(|s| s.name == "ThreeWay Diverged").expect("found");
+        assert_eq!(skill.sync_status, "diverged");
+        assert!(skill.managed);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn collect_ide_skills_three_way_conflict() {
+        // central != installed-at AND installed-at != current → conflict
+        let unique = unique_test_name("3way-conflict");
+        let root = std::env::temp_dir().join(&unique);
+        let manager_root = root.join("manager");
+        let ide_root = root.join("ide");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+        fs::create_dir_all(&ide_root).expect("create ide root");
+
+        let original = "---\nname: ThreeWay Conflict\nversion: 1.0.0\n---\nOriginal\n";
+        let central_updated = "---\nname: ThreeWay Conflict\nversion: 2.0.0\n---\nCentral updated\n";
+        let locally_modified = "---\nname: ThreeWay Conflict\nversion: 1.0.0\n---\nLocally modified\n";
+        // Central updated
+        let manager_dir = write_skill_dir(&manager_root, "tw-conflict", central_updated);
+        // IDE locally modified (different from both original and central)
+        let ide_dir = write_skill_dir(&ide_root, "tw-conflict", locally_modified);
+
+        // installed-at hash = original (differs from both central and current)
+        let original_dir = std::env::temp_dir().join(unique_test_name("3way-conflict-orig"));
+        fs::create_dir_all(&original_dir).expect("create orig dir");
+        write_skill_dir(&original_dir, "tw-conflict", original);
+        let original_hash = skill_content_hash(&original_dir.join("tw-conflict"));
+
+        write_install_sidecar(&ide_dir, &InstalledSkillSidecar {
+            version_id: Some("v1".to_string()),
+            content_hash: Some(original_hash),
+            installed_at: Some(1700000000),
+            source_skill_id: Some("tw-conflict_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: None,
+            ..Default::default()
+        }).expect("write sidecar");
+
+        let manager_hash = skill_content_hash(&manager_dir);
+        let mut manager_skills = vec![LocalSkill {
+            id: manager_dir.display().to_string(),
+            name: "ThreeWay Conflict".to_string(),
+            description: "".to_string(),
+            path: manager_dir.display().to_string(),
+            source: "manager".to_string(),
+            ide: None,
+            used_by: Vec::new(),
+            version_count: 1,
+            current_version: Some(SkillVersion {
+                id: "v2".to_string(),
+                skill_id: "tw-conflict_default".to_string(),
+                version: "2.0.0".to_string(),
+                display_name: "2.0.0".to_string(),
+                content_hash: manager_hash.clone(),
+                created_at: 1700000000,
+                source: SkillVersionSource::Clone,
+                source_url: None,
+                parent_version: None,
+                is_active: true,
+                metadata: SkillVersionMetadata {
+                    name: "ThreeWay Conflict".to_string(),
+                    description: "".to_string(),
+                    author: None,
+                    namespace: None,
+                },
+            }),
+        }];
+        let manager_map = vec![(manager_hash, 0usize)];
+        let version_hash_map = std::collections::HashMap::new();
+
+        let ide_skills = collect_ide_skills(
+            &ide_root, "TestIDE", "global", &manager_map, &mut manager_skills, &version_hash_map,
+        );
+
+        let skill = ide_skills.iter().find(|s| s.name == "ThreeWay Conflict").expect("found");
+        assert_eq!(skill.sync_status, "conflict");
+        assert!(skill.managed);
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(original_dir);
+    }
+
+    #[test]
+    fn collect_ide_skills_independent_skips_comparison() {
+        let unique = unique_test_name("3way-independent");
+        let root = std::env::temp_dir().join(&unique);
+        let ide_root = root.join("ide");
+        fs::create_dir_all(&ide_root).expect("create ide root");
+
+        let ide_dir = write_skill_dir(&ide_root, "ind-skill", "---\nname: Independent Test\n---\nBody\n");
+        write_install_sidecar(&ide_dir, &InstalledSkillSidecar {
+            version_id: Some("v1".to_string()),
+            content_hash: Some("some_old_hash".to_string()),
+            installed_at: Some(1700000000),
+            source_skill_id: Some("ind-skill_default".to_string()),
+            sync_mode: Some("independent".to_string()),
+            sync_branch: None,
+            ..Default::default()
+        }).expect("write sidecar");
+
+        let manager_map: Vec<(String, usize)> = vec![];
+        let mut manager_skills: Vec<LocalSkill> = vec![];
+        let version_hash_map = std::collections::HashMap::new();
+
+        let ide_skills = collect_ide_skills(
+            &ide_root, "TestIDE", "global", &manager_map, &mut manager_skills, &version_hash_map,
+        );
+
+        let skill = ide_skills.iter().find(|s| s.name == "Independent Test").expect("found");
+        assert_eq!(skill.sync_status, "independent");
+        assert_eq!(skill.sync_mode.as_deref(), Some("independent"));
+        assert!(skill.managed);
 
         let _ = fs::remove_dir_all(root);
     }
@@ -1926,6 +2374,8 @@ mod tests {
                 name: "Test IDE".to_string(),
                 path: target_root.display().to_string(),
             }],
+            sync_mode: None,
+            sync_branch: None,
         }).expect("clone succeeds");
 
         assert!(!result.installed.is_empty());
@@ -2044,5 +2494,266 @@ mod tests {
         let fields: Vec<&str> = diff.metadata_changes.iter().map(|c| c.field.as_str()).collect();
         assert!(fields.contains(&"description"));
         assert!(fields.contains(&"version"));
+    }
+
+    #[test]
+    fn test_structured_diff_title_only() {
+        // Create two SkillVersions where only the name differs
+        let mut base = fixture_version("Same description", "1.0.0", "same_hash");
+        let mut incoming = fixture_version("Same description", "1.0.0", "same_hash");
+        base.metadata.name = "SkillA".to_string();
+        incoming.metadata.name = "SkillB".to_string();
+
+        let diff = build_skill_diff(&base, &incoming);
+
+        let structured = diff.structured.expect("structured diff should be present");
+        assert_eq!(structured.change_type, ChangeType::TitleOnly);
+        assert!(structured.title_changed, "title_changed should be true");
+        assert!(!structured.body_changed, "body_changed should be false");
+        assert!(!structured.resources_changed, "resources_changed should be false");
+    }
+
+    #[test]
+    fn test_structured_diff_identical() {
+        let base = fixture_version("Same description", "1.0.0", "same_hash");
+        let incoming = fixture_version("Same description", "1.0.0", "same_hash");
+
+        let diff = build_skill_diff(&base, &incoming);
+
+        let structured = diff.structured.expect("structured diff should be present");
+        assert_eq!(structured.change_type, ChangeType::Identical);
+        assert!(!structured.title_changed);
+        assert!(!structured.body_changed);
+        assert!(!structured.resources_changed);
+    }
+
+    #[test]
+    fn test_structured_diff_body_changed() {
+        let base = fixture_version("Old description", "1.0.0", "hash_a");
+        let incoming = fixture_version("New description", "2.0.0", "hash_b");
+
+        let diff = build_skill_diff(&base, &incoming);
+
+        let structured = diff.structured.expect("structured diff should be present");
+        assert_eq!(structured.change_type, ChangeType::BodyChanged);
+        assert!(!structured.title_changed);
+        assert!(structured.body_changed);
+        assert!(!structured.resources_changed);
+    }
+
+    // ========================================================================
+    // Sync integration tests: lifecycle, sidecar compat, path validation, diff
+    // ========================================================================
+
+    /// Full sync lifecycle: synced → diverged → conflict via real filesystem hashes.
+    #[test]
+    fn test_sync_full_lifecycle() {
+        let tmp = tempfile::tempdir().expect("create tempdir");
+        let central_dir = tmp.path().join("central").join("test-skill");
+        let project_dir = tmp.path().join("project").join("test-skill");
+        fs::create_dir_all(&central_dir).expect("create central dir");
+        fs::create_dir_all(&project_dir).expect("create project dir");
+
+        let initial_content = "---\nname: Test Skill\nversion: 1.0.0\nnamespace: default\n---\nInitial body\n";
+        fs::write(central_dir.join("SKILL.md"), initial_content).expect("write central SKILL.md");
+
+        // Simulate install: copy central to project
+        fs::write(project_dir.join("SKILL.md"), initial_content).expect("write project SKILL.md");
+
+        // Compute hash at install time
+        let installed_hash = skill_content_hash(&project_dir);
+
+        // Write sidecar as clone_local_skill would
+        let sidecar = InstalledSkillSidecar {
+            version_id: Some("1-0-0_abcdef01".to_string()),
+            content_hash: Some(installed_hash.clone()),
+            installed_at: Some(now_timestamp()),
+            source_skill_id: Some("test-skill_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: Some("main".to_string()),
+            git_source: None,
+        };
+        write_install_sidecar(&project_dir, &sidecar).expect("write install sidecar");
+
+        // Step 1: all hashes match → status should be "synced"
+        let central_hash = skill_content_hash(&central_dir);
+        let project_hash = skill_content_hash(&project_dir);
+        let sidecar_hash = installed_hash.clone();
+        // central == installed-at hash, project == installed-at hash
+        assert_eq!(central_hash, sidecar_hash, "central should match installed hash");
+        assert_eq!(project_hash, sidecar_hash, "project should match installed hash");
+        // Three-way: central_eq_installed=true, installed_eq_current=true → "synced"
+        let central_eq_installed = central_hash == sidecar_hash;
+        let installed_eq_current = sidecar_hash == project_hash;
+        let status = match (central_eq_installed, installed_eq_current) {
+            (true, true) => "synced",
+            (false, true) => "outdated",
+            (true, false) => "diverged",
+            (false, false) => "conflict",
+        };
+        assert_eq!(status, "synced");
+
+        // Step 2: user edits project SKILL.md → diverged
+        fs::write(project_dir.join("SKILL.md"), "---\nname: Test Skill\nversion: 1.0.0\nnamespace: default\n---\nUser edited body\n")
+            .expect("modify project SKILL.md");
+        let project_hash_modified = skill_content_hash(&project_dir);
+        let central_hash2 = skill_content_hash(&central_dir);
+        // central_eq_installed: central unchanged == installed-at hash → true
+        // installed_eq_current: installed-at hash ≠ project current → false
+        assert_ne!(project_hash_modified, sidecar_hash, "project hash should differ after user edit");
+        assert_eq!(central_hash2, sidecar_hash, "central hash should be unchanged");
+        let central_eq_installed2 = central_hash2 == sidecar_hash;
+        let installed_eq_current2 = sidecar_hash == project_hash_modified;
+        let status2 = match (central_eq_installed2, installed_eq_current2) {
+            (true, true) => "synced",
+            (false, true) => "outdated",
+            (true, false) => "diverged",
+            (false, false) => "conflict",
+        };
+        assert_eq!(status2, "diverged");
+
+        // Step 3: central also changes → conflict (both changed from installed-at)
+        fs::write(central_dir.join("SKILL.md"), "---\nname: Test Skill\nversion: 2.0.0\nnamespace: default\n---\nCentral update\n")
+            .expect("modify central SKILL.md");
+        let central_hash3 = skill_content_hash(&central_dir);
+        let project_hash3 = skill_content_hash(&project_dir);
+        assert_ne!(central_hash3, sidecar_hash, "central hash should differ from installed-at");
+        assert_ne!(project_hash3, sidecar_hash, "project hash should differ from installed-at");
+        let central_eq_installed3 = central_hash3 == sidecar_hash;
+        let installed_eq_current3 = sidecar_hash == project_hash3;
+        let status3 = match (central_eq_installed3, installed_eq_current3) {
+            (true, true) => "synced",
+            (false, true) => "outdated",
+            (true, false) => "diverged",
+            (false, false) => "conflict",
+        };
+        assert_eq!(status3, "conflict");
+    }
+
+    /// Detach: update sidecar sync_mode from "sync" to "independent" and verify roundtrip.
+    #[test]
+    fn test_sync_detach_writes_independent_mode() {
+        let tmp = tempfile::tempdir().expect("create tempdir");
+        let skill_dir = tmp.path().join("test-skill");
+        fs::create_dir_all(&skill_dir).expect("create skill dir");
+        fs::write(skill_dir.join("SKILL.md"), "---\nname: Detach Skill\n---\nBody\n")
+            .expect("write SKILL.md");
+
+        // Write initial sidecar in "sync" mode
+        write_install_sidecar(&skill_dir, &InstalledSkillSidecar {
+            version_id: Some("v1".to_string()),
+            content_hash: Some("abc123".to_string()),
+            installed_at: Some(1700000000),
+            source_skill_id: Some("detach-skill_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: Some("main".to_string()),
+            git_source: None,
+        }).expect("write sidecar");
+
+        // Read, detach (set independent mode), write back
+        let mut loaded = read_install_sidecar(&skill_dir);
+        assert_eq!(loaded.sync_mode.as_deref(), Some("sync"));
+        assert_eq!(loaded.sync_branch.as_deref(), Some("main"));
+
+        loaded.sync_mode = Some("independent".to_string());
+        loaded.sync_branch = None;
+        write_install_sidecar(&skill_dir, &loaded).expect("write detached sidecar");
+
+        // Read again and verify
+        let detached = read_install_sidecar(&skill_dir);
+        assert_eq!(detached.sync_mode.as_deref(), Some("independent"), "sync_mode should be independent");
+        assert!(detached.sync_branch.is_none(), "sync_branch should be None after detach");
+        // Other fields should be preserved
+        assert_eq!(detached.version_id.as_deref(), Some("v1"));
+        assert_eq!(detached.source_skill_id.as_deref(), Some("detach-skill_default"));
+    }
+
+    /// Path validation: outside home, inside manager root, missing SKILL.md, valid path.
+    #[test]
+    fn test_validate_project_skill_path() {
+        // Use a fake home to control the boundary
+        let tmp = tempfile::tempdir().expect("create tempdir");
+        let fake_home = tmp.path().join("home");
+        let manager_root = fake_home.join(".qing-skill-manager").join("skills");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+
+        // Case 1: path outside home → should fail
+        let outside_home = tmp.path().join("outside");
+        fs::create_dir_all(outside_home.join("skill")).expect("create outside dir");
+        fs::write(outside_home.join("skill").join("SKILL.md"), "content").expect("write");
+        let result_outside = scan::validate_project_skill_path(&outside_home.join("skill"), &fake_home);
+        assert!(result_outside.is_err(), "path outside home should fail validation");
+        assert!(result_outside.unwrap_err().contains("outside home directory"));
+
+        // Case 2: path inside manager root → should fail
+        let inside_manager = manager_root.join("central-skill");
+        fs::create_dir_all(&inside_manager).expect("create central skill dir");
+        fs::write(inside_manager.join("SKILL.md"), "content").expect("write");
+        let result_manager = scan::validate_project_skill_path(&inside_manager, &fake_home);
+        assert!(result_manager.is_err(), "path inside manager root should fail validation");
+
+        // Case 3: path inside home but no SKILL.md → should fail
+        let no_skill_md = fake_home.join("projects").join("my-project").join("empty-skill");
+        fs::create_dir_all(&no_skill_md).expect("create dir without SKILL.md");
+        let result_no_md = scan::validate_project_skill_path(&no_skill_md, &fake_home);
+        assert!(result_no_md.is_err(), "path without SKILL.md should fail validation");
+        assert!(result_no_md.unwrap_err().contains("SKILL.md"));
+
+        // Case 4: valid project skill path → should pass
+        let valid_path = fake_home.join("projects").join("my-project").join(".opencode").join("skills").join("my-skill");
+        fs::create_dir_all(&valid_path).expect("create valid skill dir");
+        fs::write(valid_path.join("SKILL.md"), "---\nname: My Skill\n---\nBody\n").expect("write SKILL.md");
+        let result_valid = scan::validate_project_skill_path(&valid_path, &fake_home);
+        assert!(result_valid.is_ok(), "valid project skill path should pass validation");
+    }
+
+    /// Structured diff: same metadata but different content_hash → ResourceChanged.
+    #[test]
+    fn test_structured_diff_resource_changed() {
+        // Build two SkillVersions with same metadata but different content_hash.
+        // fixture_version sets same name/author/description for both; only hash differs.
+        // To get resources_changed=true we need: title same, body same, hash different.
+        let base = fixture_version("Same description", "1.0.0", "hash_base");
+        let incoming = fixture_version("Same description", "1.0.0", "hash_incoming");
+        // Ensure names are identical (fixture already sets "Demo" for both)
+        assert_eq!(base.metadata.name, incoming.metadata.name);
+        assert_eq!(base.metadata.description, incoming.metadata.description);
+        assert_eq!(base.metadata.author, incoming.metadata.author);
+        assert_eq!(base.version, incoming.version);
+        // Hashes must differ
+        assert_ne!(base.content_hash, incoming.content_hash);
+
+        let diff = build_skill_diff(&base, &incoming);
+
+        let structured = diff.structured.expect("structured diff should be present");
+        assert!(!structured.title_changed, "title_changed should be false");
+        assert!(!structured.body_changed, "body_changed should be false");
+        assert!(structured.resources_changed, "resources_changed should be true");
+        assert_eq!(structured.change_type, ChangeType::ResourceChanged);
+    }
+
+    /// Backward compat: old sidecar JSON without sync fields deserializes with None for new fields.
+    #[test]
+    fn test_installed_sidecar_backward_compat() {
+        // Old sidecar format: only the fields that existed before sync was added
+        let old_json = r#"{
+            "versionId": "1-0-0_abc12345",
+            "contentHash": "abc1234567890def",
+            "installedAt": 1700000000,
+            "sourceSkillId": "my-skill_default"
+        }"#;
+
+        let sidecar: InstalledSkillSidecar =
+            serde_json::from_str(old_json).expect("deserialize old sidecar");
+
+        assert_eq!(sidecar.version_id.as_deref(), Some("1-0-0_abc12345"));
+        assert_eq!(sidecar.content_hash.as_deref(), Some("abc1234567890def"));
+        assert_eq!(sidecar.installed_at, Some(1700000000));
+        assert_eq!(sidecar.source_skill_id.as_deref(), Some("my-skill_default"));
+
+        // New fields must default to None (backward compat)
+        assert!(sidecar.sync_mode.is_none(), "sync_mode should be None for old sidecar");
+        assert!(sidecar.sync_branch.is_none(), "sync_branch should be None for old sidecar");
+        assert!(sidecar.git_source.is_none(), "git_source should be None for old sidecar");
     }
 }

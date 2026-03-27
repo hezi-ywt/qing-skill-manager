@@ -368,7 +368,9 @@ export function useLibraryWorkspace(options: UseLibraryWorkspaceOptions) {
         versionId: ideSkill.versionId,
         isManaged: ideSkill.managed,
         scope: ideSkill.scope,
-        syncStatus: ideSkill.syncStatus
+        syncStatus: ideSkill.syncStatus,
+        syncMode: ideSkill.syncMode,
+        syncBranch: ideSkill.syncBranch
       });
     }
 

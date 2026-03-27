@@ -11,7 +11,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "confirm", installTarget: "ide" | "project", targetIds: string[], projects: ProjectConfig[]): void;
+  (e: "confirm", installTarget: "ide" | "project", targetIds: string[], projects: ProjectConfig[], syncMode: string, syncBranch: string): void;
   (e: "cancel"): void;
 }>();
 
@@ -19,6 +19,15 @@ const { t } = useI18n();
 
 const selectedIdeTargets = ref<string[]>([]);
 const selectedProjectIds = ref<string[]>([]);
+const syncMode = ref<"sync" | "independent">("sync");
+const syncBranch = ref("main");
+const customBranch = ref("");
+const builtinBranches = ["main", "dev", "stable"];
+
+function getEffectiveBranch() {
+  if (syncMode.value === "independent") return "";
+  return syncBranch.value === "__custom__" ? customBranch.value : syncBranch.value;
+}
 
 function toggleIdeTarget(ideId: string) {
   const index = selectedIdeTargets.value.indexOf(ideId);
@@ -39,24 +48,23 @@ function toggleProject(projectId: string) {
 }
 
 function confirmInstallToIde() {
-  if (selectedIdeTargets.value.length === 0) {
-    return;
-  }
-  emit("confirm", "ide", [...selectedIdeTargets.value], props.projects);
+  if (selectedIdeTargets.value.length === 0) return;
+  emit("confirm", "ide", [...selectedIdeTargets.value], props.projects, syncMode.value, getEffectiveBranch());
   selectedIdeTargets.value = [];
 }
 
 function confirmInstallToProject() {
-  if (selectedProjectIds.value.length === 0) {
-    return;
-  }
-  emit("confirm", "project", [...selectedProjectIds.value], props.projects);
+  if (selectedProjectIds.value.length === 0) return;
+  emit("confirm", "project", [...selectedProjectIds.value], props.projects, syncMode.value, getEffectiveBranch());
   selectedProjectIds.value = [];
 }
 
 function close() {
   selectedIdeTargets.value = [];
   selectedProjectIds.value = [];
+  syncMode.value = "sync";
+  syncBranch.value = "main";
+  customBranch.value = "";
   emit("cancel");
 }
 </script>
@@ -120,6 +128,34 @@ function close() {
             </div>
           </label>
         </div>
+      </div>
+    </div>
+
+    <!-- Sync Options -->
+    <div class="sync-options">
+      <h3 class="sync-title">{{ t("installModal.syncOptions") }}</h3>
+      <div class="sync-mode-row">
+        <label class="radio-option">
+          <input type="radio" v-model="syncMode" value="sync" />
+          {{ t("installModal.syncMode") }}
+        </label>
+        <label class="radio-option">
+          <input type="radio" v-model="syncMode" value="independent" />
+          {{ t("installModal.independentMode") }}
+        </label>
+      </div>
+      <div v-if="syncMode === 'sync'" class="branch-select">
+        <label class="branch-label">{{ t("installModal.syncBranch") }}</label>
+        <select v-model="syncBranch" class="branch-dropdown">
+          <option v-for="b in builtinBranches" :key="b" :value="b">{{ b }}</option>
+          <option value="__custom__">{{ t("installModal.customBranch") }}</option>
+        </select>
+        <input
+          v-if="syncBranch === '__custom__'"
+          v-model="customBranch"
+          class="custom-branch-input"
+          :placeholder="t('installModal.customBranchPlaceholder')"
+        />
       </div>
     </div>
 
@@ -247,5 +283,53 @@ function close() {
   .column {
     max-height: 40vh;
   }
+}
+
+.sync-options {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+.sync-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.sync-mode-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.branch-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.branch-label {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+}
+.branch-dropdown {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--bg-primary, #fff);
+  color: var(--text-primary, #111);
+}
+.custom-branch-input {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 4px;
+  font-size: 13px;
+  width: 120px;
 }
 </style>
