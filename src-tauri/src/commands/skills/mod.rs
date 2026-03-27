@@ -78,6 +78,18 @@ pub(crate) struct InstalledSkillSidecar {
     pub content_hash: Option<String>,
     pub installed_at: Option<i64>,
     pub source_skill_id: Option<String>,
+    pub sync_mode: Option<String>,       // "sync" | "independent"
+    pub sync_branch: Option<String>,     // "main" | "dev" | custom name
+    pub git_source: Option<GitSourceSidecar>,
+}
+
+/// Git source tracking (stored in sidecar)
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GitSourceSidecar {
+    pub repo: Option<String>,
+    pub git_ref: Option<String>,
+    pub sha: Option<String>,
 }
 
 pub(crate) fn read_install_sidecar(skill_dir: &Path) -> InstalledSkillSidecar {

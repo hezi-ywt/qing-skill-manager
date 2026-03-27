@@ -62,6 +62,7 @@ pub fn clone_local_skill(request: InstallRequest) -> Result<InstallResult, Strin
             content_hash: Some(version.content_hash),
             installed_at: Some(now_timestamp()),
             source_skill_id: Some(version.skill_id),
+            ..Default::default()
         });
 
         installed.push(format!("{}: {}", target.name, clone_path.display()));
@@ -434,6 +435,7 @@ pub fn adopt_ide_skill(request: AdoptIdeSkillRequest) -> Result<String, String> 
         content_hash: Some(version.content_hash),
         installed_at: Some(now_timestamp()),
         source_skill_id: Some(version.skill_id),
+        ..Default::default()
     });
 
     Ok(format!(
