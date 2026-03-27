@@ -10,6 +10,7 @@ use commands::skills::{
     list_skill_packages, rename_skill_version, resolve_skill_conflict,
     scan_overview, scan_project_ide_dirs, scan_project_opencode_skills, scan_project_skills, compare_skill_versions,
     set_default_skill_version, uninstall_skill, update_skill_variant, get_app_config, save_app_config,
+    sync_push, sync_pull, sync_detach,
 };
 
 pub use crate::types::{
@@ -62,7 +63,10 @@ pub fn run() {
             set_default_skill_version,
             create_skill_variant,
             update_skill_variant,
-            delete_skill_variant
+            delete_skill_variant,
+            sync_push,
+            sync_pull,
+            sync_detach
         ]);
 
     #[cfg(desktop)]
