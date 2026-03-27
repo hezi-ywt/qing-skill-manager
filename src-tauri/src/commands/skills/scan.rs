@@ -57,12 +57,16 @@ pub fn clone_local_skill(request: InstallRequest) -> Result<InstallResult, Strin
 
         // Write install sidecar for version tracking
         let version = build_skill_version(&skill_path, SkillVersionSource::Clone);
+        let sync_mode = request.sync_mode.clone().unwrap_or_else(|| "sync".to_string());
+        let sync_branch = request.sync_branch.clone().unwrap_or_else(|| "main".to_string());
         let _ = write_install_sidecar(&clone_path, &InstalledSkillSidecar {
             version_id: Some(version.id),
             content_hash: Some(version.content_hash),
             installed_at: Some(now_timestamp()),
             source_skill_id: Some(version.skill_id),
-            ..Default::default()
+            sync_mode: Some(sync_mode),
+            sync_branch: Some(sync_branch),
+            git_source: None,
         });
 
         installed.push(format!("{}: {}", target.name, clone_path.display()));
