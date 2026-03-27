@@ -709,7 +709,7 @@ pub fn scan_project_skills(
 ///   1. Path resolves to inside the home directory.
 ///   2. Path is NOT inside ~/.qing-skill-manager/skills (central storage).
 ///   3. Path contains a SKILL.md file (sanity check it's actually a skill).
-fn validate_project_skill_path(path: &Path, home: &Path) -> Result<(), String> {
+pub(crate) fn validate_project_skill_path(path: &Path, home: &Path) -> Result<(), String> {
     let normalized = normalize_path(path);
     let manager_root = normalize_path(&home.join(".qing-skill-manager/skills"));
 

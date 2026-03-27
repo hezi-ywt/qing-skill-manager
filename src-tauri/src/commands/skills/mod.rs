@@ -2540,4 +2540,220 @@ mod tests {
         assert!(structured.body_changed);
         assert!(!structured.resources_changed);
     }
+
+    // ========================================================================
+    // Sync integration tests: lifecycle, sidecar compat, path validation, diff
+    // ========================================================================
+
+    /// Full sync lifecycle: synced → diverged → conflict via real filesystem hashes.
+    #[test]
+    fn test_sync_full_lifecycle() {
+        let tmp = tempfile::tempdir().expect("create tempdir");
+        let central_dir = tmp.path().join("central").join("test-skill");
+        let project_dir = tmp.path().join("project").join("test-skill");
+        fs::create_dir_all(&central_dir).expect("create central dir");
+        fs::create_dir_all(&project_dir).expect("create project dir");
+
+        let initial_content = "---\nname: Test Skill\nversion: 1.0.0\nnamespace: default\n---\nInitial body\n";
+        fs::write(central_dir.join("SKILL.md"), initial_content).expect("write central SKILL.md");
+
+        // Simulate install: copy central to project
+        fs::write(project_dir.join("SKILL.md"), initial_content).expect("write project SKILL.md");
+
+        // Compute hash at install time
+        let installed_hash = skill_content_hash(&project_dir);
+
+        // Write sidecar as clone_local_skill would
+        let sidecar = InstalledSkillSidecar {
+            version_id: Some("1-0-0_abcdef01".to_string()),
+            content_hash: Some(installed_hash.clone()),
+            installed_at: Some(now_timestamp()),
+            source_skill_id: Some("test-skill_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: Some("main".to_string()),
+            git_source: None,
+        };
+        write_install_sidecar(&project_dir, &sidecar).expect("write install sidecar");
+
+        // Step 1: all hashes match → status should be "synced"
+        let central_hash = skill_content_hash(&central_dir);
+        let project_hash = skill_content_hash(&project_dir);
+        let sidecar_hash = installed_hash.clone();
+        // central == installed-at hash, project == installed-at hash
+        assert_eq!(central_hash, sidecar_hash, "central should match installed hash");
+        assert_eq!(project_hash, sidecar_hash, "project should match installed hash");
+        // Three-way: central_eq_installed=true, installed_eq_current=true → "synced"
+        let central_eq_installed = central_hash == sidecar_hash;
+        let installed_eq_current = sidecar_hash == project_hash;
+        let status = match (central_eq_installed, installed_eq_current) {
+            (true, true) => "synced",
+            (false, true) => "outdated",
+            (true, false) => "diverged",
+            (false, false) => "conflict",
+        };
+        assert_eq!(status, "synced");
+
+        // Step 2: user edits project SKILL.md → diverged
+        fs::write(project_dir.join("SKILL.md"), "---\nname: Test Skill\nversion: 1.0.0\nnamespace: default\n---\nUser edited body\n")
+            .expect("modify project SKILL.md");
+        let project_hash_modified = skill_content_hash(&project_dir);
+        let central_hash2 = skill_content_hash(&central_dir);
+        // central_eq_installed: central unchanged == installed-at hash → true
+        // installed_eq_current: installed-at hash ≠ project current → false
+        assert_ne!(project_hash_modified, sidecar_hash, "project hash should differ after user edit");
+        assert_eq!(central_hash2, sidecar_hash, "central hash should be unchanged");
+        let central_eq_installed2 = central_hash2 == sidecar_hash;
+        let installed_eq_current2 = sidecar_hash == project_hash_modified;
+        let status2 = match (central_eq_installed2, installed_eq_current2) {
+            (true, true) => "synced",
+            (false, true) => "outdated",
+            (true, false) => "diverged",
+            (false, false) => "conflict",
+        };
+        assert_eq!(status2, "diverged");
+
+        // Step 3: central also changes → conflict (both changed from installed-at)
+        fs::write(central_dir.join("SKILL.md"), "---\nname: Test Skill\nversion: 2.0.0\nnamespace: default\n---\nCentral update\n")
+            .expect("modify central SKILL.md");
+        let central_hash3 = skill_content_hash(&central_dir);
+        let project_hash3 = skill_content_hash(&project_dir);
+        assert_ne!(central_hash3, sidecar_hash, "central hash should differ from installed-at");
+        assert_ne!(project_hash3, sidecar_hash, "project hash should differ from installed-at");
+        let central_eq_installed3 = central_hash3 == sidecar_hash;
+        let installed_eq_current3 = sidecar_hash == project_hash3;
+        let status3 = match (central_eq_installed3, installed_eq_current3) {
+            (true, true) => "synced",
+            (false, true) => "outdated",
+            (true, false) => "diverged",
+            (false, false) => "conflict",
+        };
+        assert_eq!(status3, "conflict");
+    }
+
+    /// Detach: update sidecar sync_mode from "sync" to "independent" and verify roundtrip.
+    #[test]
+    fn test_sync_detach_writes_independent_mode() {
+        let tmp = tempfile::tempdir().expect("create tempdir");
+        let skill_dir = tmp.path().join("test-skill");
+        fs::create_dir_all(&skill_dir).expect("create skill dir");
+        fs::write(skill_dir.join("SKILL.md"), "---\nname: Detach Skill\n---\nBody\n")
+            .expect("write SKILL.md");
+
+        // Write initial sidecar in "sync" mode
+        write_install_sidecar(&skill_dir, &InstalledSkillSidecar {
+            version_id: Some("v1".to_string()),
+            content_hash: Some("abc123".to_string()),
+            installed_at: Some(1700000000),
+            source_skill_id: Some("detach-skill_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: Some("main".to_string()),
+            git_source: None,
+        }).expect("write sidecar");
+
+        // Read, detach (set independent mode), write back
+        let mut loaded = read_install_sidecar(&skill_dir);
+        assert_eq!(loaded.sync_mode.as_deref(), Some("sync"));
+        assert_eq!(loaded.sync_branch.as_deref(), Some("main"));
+
+        loaded.sync_mode = Some("independent".to_string());
+        loaded.sync_branch = None;
+        write_install_sidecar(&skill_dir, &loaded).expect("write detached sidecar");
+
+        // Read again and verify
+        let detached = read_install_sidecar(&skill_dir);
+        assert_eq!(detached.sync_mode.as_deref(), Some("independent"), "sync_mode should be independent");
+        assert!(detached.sync_branch.is_none(), "sync_branch should be None after detach");
+        // Other fields should be preserved
+        assert_eq!(detached.version_id.as_deref(), Some("v1"));
+        assert_eq!(detached.source_skill_id.as_deref(), Some("detach-skill_default"));
+    }
+
+    /// Path validation: outside home, inside manager root, missing SKILL.md, valid path.
+    #[test]
+    fn test_validate_project_skill_path() {
+        // Use a fake home to control the boundary
+        let tmp = tempfile::tempdir().expect("create tempdir");
+        let fake_home = tmp.path().join("home");
+        let manager_root = fake_home.join(".qing-skill-manager").join("skills");
+        fs::create_dir_all(&manager_root).expect("create manager root");
+
+        // Case 1: path outside home → should fail
+        let outside_home = tmp.path().join("outside");
+        fs::create_dir_all(outside_home.join("skill")).expect("create outside dir");
+        fs::write(outside_home.join("skill").join("SKILL.md"), "content").expect("write");
+        let result_outside = scan::validate_project_skill_path(&outside_home.join("skill"), &fake_home);
+        assert!(result_outside.is_err(), "path outside home should fail validation");
+        assert!(result_outside.unwrap_err().contains("outside home directory"));
+
+        // Case 2: path inside manager root → should fail
+        let inside_manager = manager_root.join("central-skill");
+        fs::create_dir_all(&inside_manager).expect("create central skill dir");
+        fs::write(inside_manager.join("SKILL.md"), "content").expect("write");
+        let result_manager = scan::validate_project_skill_path(&inside_manager, &fake_home);
+        assert!(result_manager.is_err(), "path inside manager root should fail validation");
+
+        // Case 3: path inside home but no SKILL.md → should fail
+        let no_skill_md = fake_home.join("projects").join("my-project").join("empty-skill");
+        fs::create_dir_all(&no_skill_md).expect("create dir without SKILL.md");
+        let result_no_md = scan::validate_project_skill_path(&no_skill_md, &fake_home);
+        assert!(result_no_md.is_err(), "path without SKILL.md should fail validation");
+        assert!(result_no_md.unwrap_err().contains("SKILL.md"));
+
+        // Case 4: valid project skill path → should pass
+        let valid_path = fake_home.join("projects").join("my-project").join(".opencode").join("skills").join("my-skill");
+        fs::create_dir_all(&valid_path).expect("create valid skill dir");
+        fs::write(valid_path.join("SKILL.md"), "---\nname: My Skill\n---\nBody\n").expect("write SKILL.md");
+        let result_valid = scan::validate_project_skill_path(&valid_path, &fake_home);
+        assert!(result_valid.is_ok(), "valid project skill path should pass validation");
+    }
+
+    /// Structured diff: same metadata but different content_hash → ResourceChanged.
+    #[test]
+    fn test_structured_diff_resource_changed() {
+        // Build two SkillVersions with same metadata but different content_hash.
+        // fixture_version sets same name/author/description for both; only hash differs.
+        // To get resources_changed=true we need: title same, body same, hash different.
+        let base = fixture_version("Same description", "1.0.0", "hash_base");
+        let incoming = fixture_version("Same description", "1.0.0", "hash_incoming");
+        // Ensure names are identical (fixture already sets "Demo" for both)
+        assert_eq!(base.metadata.name, incoming.metadata.name);
+        assert_eq!(base.metadata.description, incoming.metadata.description);
+        assert_eq!(base.metadata.author, incoming.metadata.author);
+        assert_eq!(base.version, incoming.version);
+        // Hashes must differ
+        assert_ne!(base.content_hash, incoming.content_hash);
+
+        let diff = build_skill_diff(&base, &incoming);
+
+        let structured = diff.structured.expect("structured diff should be present");
+        assert!(!structured.title_changed, "title_changed should be false");
+        assert!(!structured.body_changed, "body_changed should be false");
+        assert!(structured.resources_changed, "resources_changed should be true");
+        assert_eq!(structured.change_type, ChangeType::ResourceChanged);
+    }
+
+    /// Backward compat: old sidecar JSON without sync fields deserializes with None for new fields.
+    #[test]
+    fn test_installed_sidecar_backward_compat() {
+        // Old sidecar format: only the fields that existed before sync was added
+        let old_json = r#"{
+            "versionId": "1-0-0_abc12345",
+            "contentHash": "abc1234567890def",
+            "installedAt": 1700000000,
+            "sourceSkillId": "my-skill_default"
+        }"#;
+
+        let sidecar: InstalledSkillSidecar =
+            serde_json::from_str(old_json).expect("deserialize old sidecar");
+
+        assert_eq!(sidecar.version_id.as_deref(), Some("1-0-0_abc12345"));
+        assert_eq!(sidecar.content_hash.as_deref(), Some("abc1234567890def"));
+        assert_eq!(sidecar.installed_at, Some(1700000000));
+        assert_eq!(sidecar.source_skill_id.as_deref(), Some("my-skill_default"));
+
+        // New fields must default to None (backward compat)
+        assert!(sidecar.sync_mode.is_none(), "sync_mode should be None for old sidecar");
+        assert!(sidecar.sync_branch.is_none(), "sync_branch should be None for old sidecar");
+        assert!(sidecar.git_source.is_none(), "git_source should be None for old sidecar");
+    }
 }
