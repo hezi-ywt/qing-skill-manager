@@ -11,10 +11,10 @@ async function mockTauriApi(page: import("@playwright/test").Page) {
         console.log(`[mock invoke] ${cmd}`, args);
         // Return sensible defaults per command
         const mocks: Record<string, any> = {
-          scan_overview: { manager_skills: [], ide_skills: [] },
-          search_marketplaces: { skills: [], total: 0, limit: 20, offset: 0, market_statuses: [] },
-          get_app_config: { default_version_strategy: "manual" },
-          scan_project_ide_dirs: { detected_dirs: [] },
+          scan_overview: { managerSkills: [], ideSkills: [] },
+          search_marketplaces: { skills: [], total: 0, limit: 20, offset: 0, marketStatuses: [] },
+          get_app_config: { defaultVersionStrategy: "manual" },
+          scan_project_ide_dirs: { detectedDirs: [] },
           scan_project_skills: { skills: [] },
           list_skill_packages: { packages: [] },
         };
