@@ -48,7 +48,9 @@ export function useInstallActions(
     skill: LocalSkill,
     ideLabel: string,
     skipScan = false,
-    suppressToast = false
+    suppressToast = false,
+    syncMode = "independent",
+    syncBranch = ""
   ): Promise<InstallResult> {
     const installTargets = await buildInstallTargets(ideLabel);
     if (installTargets.length === 0) {
@@ -59,7 +61,9 @@ export function useInstallActions(
       request: {
         skillPath: skill.path,
         skillName: skill.name,
-        installTargets
+        installTargets,
+        syncMode,
+        syncBranch,
       }
     })) as InstallResult;
 
@@ -77,7 +81,9 @@ export function useInstallActions(
     projectPath: string,
     ideLabel: string,
     skipScan = false,
-    suppressToast = false
+    suppressToast = false,
+    syncMode = "independent",
+    syncBranch = ""
   ): Promise<InstallResult> {
     const installTargets = await buildProjectInstallTargets(projectPath, ideLabel);
     if (installTargets.length === 0) {
@@ -88,7 +94,9 @@ export function useInstallActions(
       request: {
         skillPath: skill.path,
         skillName: skill.name,
-        installTargets
+        installTargets,
+        syncMode,
+        syncBranch,
       }
     })) as InstallResult;
 
@@ -122,7 +130,9 @@ export function useInstallActions(
   async function confirmInstallToIde(
     installTarget: "ide" | "project",
     targetIds: string[],
-    projects?: ProjectConfig[]
+    projects?: ProjectConfig[],
+    syncMode = "independent",
+    syncBranch = ""
   ): Promise<void> {
     if (installTarget === "project") {
       if (!projects || projects.length === 0) {
@@ -152,7 +162,7 @@ export function useInstallActions(
           for (const project of selectedProjects) {
             for (const ideLabel of project.ideTargets) {
               try {
-                const result = await cloneSkillToProjectInternal(skill, project.path, ideLabel, true, true);
+                const result = await cloneSkillToProjectInternal(skill, project.path, ideLabel, true, true, syncMode, syncBranch);
                 totalInstalled += result.installed.length;
                 totalSkipped += result.skipped.length;
               } catch {
@@ -199,7 +209,7 @@ export function useInstallActions(
       for (const skill of installTargetSkills.value) {
         for (const label of targetIds) {
           try {
-            const result = await cloneSkillToIdeInternal(skill, label, true, true);
+            const result = await cloneSkillToIdeInternal(skill, label, true, true, syncMode, syncBranch);
             totalInstalled += result.installed.length;
             totalSkipped += result.skipped.length;
           } catch {
