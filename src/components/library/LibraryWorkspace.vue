@@ -610,6 +610,7 @@ onUnmounted(() => {
       @delete="handleDelete"
       @adopt-to-repo="$emit('adoptToRepo', $event)"
       @uninstall-skill="$emit('uninstallSkill', $event)"
+      @refresh="$emit('refresh')"
     />
 
     <div class="splitter" @mousedown="onSplitterDown('right', $event)" />

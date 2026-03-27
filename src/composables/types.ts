@@ -526,6 +526,8 @@ export type LibraryIdeInstallation = {
   isManaged: boolean;
   scope: "global" | "project" | "plugin";
   syncStatus: "synced" | "modified" | "untracked" | "unknown" | "outdated" | "diverged" | "conflict" | "independent";
+  syncMode: "sync" | "independent" | null;
+  syncBranch: string | null;
 };
 
 /**
