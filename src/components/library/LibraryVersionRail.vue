@@ -163,7 +163,8 @@ const detectedVersions = computed(() => {
     const projectInst = props.librarySkill.installations.find(
       (i) => i.scope === "project" && i.skillPath.startsWith(pm.projectPath + "/")
     );
-    const skillPath = projectInst?.skillPath || pm.projectPath;
+    if (!projectInst) continue; // Skip if no actual skill installation found
+    const skillPath = projectInst.skillPath;
     const key = `project_${pm.projectId}`;
     if (!seenPaths.has(key)) {
       seenPaths.add(key);
