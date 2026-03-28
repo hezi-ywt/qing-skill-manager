@@ -198,10 +198,25 @@ function getProjectInstallation(mapping: { projectPath: string }) {
 }
 
 // Open sync settings for a project mapping by finding its installation
-function openSyncSettingsForProject(mapping: { projectPath: string }) {
+function openSyncSettingsForProject(mapping: { projectPath: string; projectName: string; ideTargets: string[] }) {
   const inst = getProjectInstallation(mapping);
   if (inst) {
     openSyncSettings(inst);
+  } else {
+    // No matching installation found — construct a minimal one for sidecar operations
+    const skillName = props.skill?.name || "";
+    const skillPath = mapping.projectPath + "/" + skillName;
+    openSyncSettings({
+      ideId: mapping.ideTargets[0] || "unknown",
+      ideLabel: mapping.ideTargets[0] || "unknown",
+      skillPath,
+      scope: "project",
+      isManaged: true,
+      versionId: null,
+      syncStatus: "unknown",
+      syncMode: null,
+      syncBranch: null,
+    } as LibraryIdeInstallation);
   }
 }
 
