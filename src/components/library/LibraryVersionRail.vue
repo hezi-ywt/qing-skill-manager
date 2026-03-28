@@ -312,7 +312,7 @@ const groupedUnmanagedSources = computed(() => {
               <span class="detected-info-value">{{ dv.ide }}</span>
             </div>
             <div class="detected-info-row">
-              <span class="detected-info-label">{{ t("ide.scopeLabel") || "范围" }}</span>
+              <span class="detected-info-label">{{ t("ide.scopeLabel") }}</span>
               <span class="detected-info-value">{{ dv.scope === "project" ? t("ide.scopeProject") : t("ide.scopeGlobal") }}</span>
             </div>
           </div>

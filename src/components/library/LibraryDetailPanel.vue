@@ -232,7 +232,7 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
       <section class="panel section-panel">
         <div class="section-title-row">
           <div class="panel-title section-title-text">{{ t("library.globalInstallations") }}</div>
-          <div class="hint">{{ globalInstallations.length > 0 ? `${globalInstallations.length} IDE` : "" }}</div>
+          <div class="hint">{{ globalInstallations.length > 0 ? t("library.ideCount", { count: globalInstallations.length }) : "" }}</div>
         </div>
         <div v-if="globalInstallations.length === 0" class="hint">{{ selectedVersionId ? t("library.noInstallForVersion") : t("library.notInstalled") }}</div>
         <div v-else class="install-list">
