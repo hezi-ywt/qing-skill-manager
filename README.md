@@ -41,9 +41,22 @@ Built with **Tauri 2 + Vue 3 + Rust**. Open source. Cross-platform.
 
 Every Agent IDE stores skills in its own directory. Qing Skill Manager reads them all, shows you exactly what's installed where, and lets you install, uninstall, or sync from one unified view. Natively supports **Claude Code, Cursor, Codex, OpenCode, OpenClaw** — and you can register any custom IDE in seconds.
 
+### Smart Sync & Version Lines
+
+Every installed skill tracks its sync status against the central repository using **three-way hash comparison** (central vs installed-at vs current). Status is shown as color-coded tags:
+
+- **Synced · main** (green) — up to date with central
+- **Update Available · main** (orange) — central has a newer version
+- **Modified · main** (blue) — local changes not yet pushed back
+- **Conflict · main** (red) — both sides changed independently
+
+Install skills in **Follow Updates** mode (default, tracks a version line) or **Copy Only** mode (independent, no tracking). Built-in version lines: `main`, `dev`, `stable` — plus custom names. Change sync settings anytime via the ⚙ button on each installation.
+
+Sync operations: **Push to Central** (send local changes back), **Pull Latest** (get the newest version), or **Stop Following** (switch to copy-only).
+
 ### Multi-Version Skill Tracking
 
-Each skill can have **multiple versions** in your local repository. Compare any two versions side-by-side (file diffs, metadata changes, similarity score). Set a default version, create named **variants** for different use cases (e.g. "concise" vs. "verbose"), and pin a specific version to a specific project. Version history tracks source (marketplace, project import, manual) and creation date.
+Each skill can have **multiple versions** in your local repository. Compare any two versions side-by-side with **structured diff** (title vs body vs resource files — so you know if it's just a rename or a real content change). Set a default version, create named **variants** for different use cases (e.g. "concise" vs. "verbose"), and pin a specific version to a specific project. Version history tracks source (marketplace, project import, manual) and creation date.
 
 ### Skill Library with Classification
 
@@ -53,7 +66,7 @@ The three-column **Skill Library** is the main workspace:
 - **Center panel** — detailed view of the selected skill: description, path, installation status per IDE, project deployments, quick actions
 - **Right version rail** — full version history, default indicator, per-version IDE and project counts, rename/delete/compare/set-default actions
 
-Skills are classified as **Managed** (tracked in your repo), **Unmanaged** (found in an IDE but not in your repo), or **Plugin-Only**. Unmanaged skills can be "adopted" into the central repo with one click.
+Skills are classified as **Managed** (tracked in your repo), **Unmanaged** (found in an IDE but not in your repo), or **Plugin-Only**. Unmanaged skills can be imported and managed ("Import & Manage") into the central repo with one click.
 
 ### Per-Project Skill Deployment
 
@@ -88,8 +101,8 @@ Marketplace / Local folder
 
 1. **Collect** — Download from marketplaces, or import from local folders. Everything lands in the central repository.
 2. **Organize** — Browse your library, manage versions, create variants, classify and filter.
-3. **Distribute** — Install globally to IDEs, or clone specific versions into specific projects.
-4. **Maintain** — The app tracks what's installed where. When versions diverge, it detects conflicts and guides resolution.
+3. **Distribute** — Install globally to IDEs, or clone specific versions into specific projects. Choose sync mode and version line during install.
+4. **Sync** — The app tracks what's installed where with three-way hash comparison. Push local changes back to central, pull latest versions, or manage version lines — all from the ⚙ settings button.
 
 ## Getting Started
 
