@@ -49,6 +49,17 @@ function getProjectSkillDetails(projectId: string) {
   const skills = props.projectSkillSnapshots?.[projectId] ?? [];
   return skills.filter((skill) => skill.status === "conflict" || skill.status === "duplicate" || skill.status === "managed_version");
 }
+
+function getStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    conflict: t("projects.statusConflict"),
+    duplicate: t("projects.statusSynced"),
+    managed_version: t("projects.statusManagedVersion"),
+    new: t("projects.statusNew"),
+    unmanaged: t("projects.statusUnmanaged"),
+  };
+  return map[status] || status;
+}
 </script>
 
 <template>
@@ -119,7 +130,7 @@ function getProjectSkillDetails(projectId: string) {
           <div v-for="skill in getProjectSkillDetails(project.id)" :key="skill.path" class="detail-item">
             <div class="detail-name-row">
               <span class="detail-name">{{ skill.name }}</span>
-              <span class="detail-status" :class="skill.status">{{ skill.status }}</span>
+              <span class="detail-status" :class="skill.status">{{ getStatusLabel(skill.status) }}</span>
             </div>
             <div class="detail-path">{{ skill.path }}</div>
           </div>
