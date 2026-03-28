@@ -477,6 +477,8 @@ function handleToggleAll(checked: boolean): void {
 
 .search-input {
   padding-left: 36px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .skills-list {
