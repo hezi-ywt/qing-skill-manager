@@ -166,16 +166,30 @@ const syncEditBranch = ref("main");
 const syncCustomBranch = ref("");
 const builtinBranches = ["main", "dev", "stable"];
 
-function openSyncSettings(inst: LibraryIdeInstallation) {
+async function openSyncSettings(inst: LibraryIdeInstallation) {
   syncSettingsInst.value = inst;
-  syncEditMode.value = (inst.syncMode as "sync" | "independent") || "sync";
-  const branch = inst.syncBranch || "main";
-  if (builtinBranches.includes(branch)) {
-    syncEditBranch.value = branch;
-    syncCustomBranch.value = "";
-  } else {
-    syncEditBranch.value = "__custom__";
-    syncCustomBranch.value = branch;
+  // Read current settings from sidecar (more reliable than cached inst data)
+  try {
+    const result = await invoke("sync_get_settings", { request: { skillPath: inst.skillPath } }) as { syncMode: string | null; syncBranch: string | null };
+    syncEditMode.value = (result.syncMode as "sync" | "independent") || "sync";
+    const branch = result.syncBranch || "main";
+    if (builtinBranches.includes(branch)) {
+      syncEditBranch.value = branch;
+      syncCustomBranch.value = "";
+    } else {
+      syncEditBranch.value = "__custom__";
+      syncCustomBranch.value = branch;
+    }
+  } catch {
+    syncEditMode.value = (inst.syncMode as "sync" | "independent") || "sync";
+    const branch = inst.syncBranch || "main";
+    if (builtinBranches.includes(branch)) {
+      syncEditBranch.value = branch;
+      syncCustomBranch.value = "";
+    } else {
+      syncEditBranch.value = "__custom__";
+      syncCustomBranch.value = branch;
+    }
   }
 }
 

@@ -57,11 +57,25 @@ const syncEditBranch = ref("main");
 const syncCustomBranch = ref("");
 const builtinBranches = ["main", "dev", "stable"];
 
-function openSkillSyncSettings(skill: ProjectSkill) {
+async function openSkillSyncSettings(skill: ProjectSkill) {
   syncSettingsSkill.value = skill;
-  syncEditMode.value = "sync";
-  syncEditBranch.value = "main";
-  syncCustomBranch.value = "";
+  // Read current settings from sidecar
+  try {
+    const result = await invoke("sync_get_settings", { request: { skillPath: skill.path } }) as { syncMode: string | null; syncBranch: string | null };
+    syncEditMode.value = (result.syncMode as "sync" | "independent") || "sync";
+    const branch = result.syncBranch || "main";
+    if (builtinBranches.includes(branch)) {
+      syncEditBranch.value = branch;
+      syncCustomBranch.value = "";
+    } else {
+      syncEditBranch.value = "__custom__";
+      syncCustomBranch.value = branch;
+    }
+  } catch {
+    syncEditMode.value = "sync";
+    syncEditBranch.value = "main";
+    syncCustomBranch.value = "";
+  }
 }
 
 function closeSkillSyncSettings() {

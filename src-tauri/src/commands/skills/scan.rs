@@ -11,6 +11,7 @@ use crate::types::{
     SkillVersionSource, ScanProjectSkillsRequest, UninstallRequest,
     SyncPushRequest, SyncPushResult, SyncPullRequest, SyncPullResult,
     SyncDetachRequest, SyncDetachResult,
+    SyncGetSettingsRequest, SyncGetSettingsResult,
     SyncUpdateSettingsRequest, SyncUpdateSettingsResult,
 };
 use crate::utils::download::copy_dir_recursive;
@@ -901,6 +902,20 @@ pub fn sync_detach(request: SyncDetachRequest) -> Result<SyncDetachResult, Strin
     Ok(SyncDetachResult {
         success: true,
         message: "Skill detached from sync tracking".to_string(),
+    })
+}
+
+/// Read current sync settings from an installed skill's sidecar
+#[tauri::command]
+pub fn sync_get_settings(request: SyncGetSettingsRequest) -> Result<SyncGetSettingsResult, String> {
+    let skill_path = PathBuf::from(&request.skill_path);
+    if !skill_path.exists() {
+        return Ok(SyncGetSettingsResult { sync_mode: None, sync_branch: None });
+    }
+    let sidecar = read_install_sidecar(&skill_path);
+    Ok(SyncGetSettingsResult {
+        sync_mode: sidecar.sync_mode,
+        sync_branch: sidecar.sync_branch,
     })
 }
 

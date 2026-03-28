@@ -10,7 +10,7 @@ use commands::skills::{
     list_skill_packages, rename_skill_version, resolve_skill_conflict,
     scan_overview, scan_project_ide_dirs, scan_project_opencode_skills, scan_project_skills, compare_skill_versions,
     set_default_skill_version, uninstall_skill, update_skill_variant, get_app_config, save_app_config,
-    sync_push, sync_pull, sync_detach, sync_update_settings,
+    sync_push, sync_pull, sync_detach, sync_get_settings, sync_update_settings,
 };
 
 pub use crate::types::{
@@ -18,7 +18,8 @@ pub use crate::types::{
     AppConfig, AppConfigResponse,
     ChangeType, GitSource, InstallMode, StructuredDiff, SyncDetachRequest,
     SyncDetachResult, SyncPullRequest, SyncPullResult, SyncPushRequest,
-    SyncPushResult, SyncStatus, SyncUpdateSettingsRequest, SyncUpdateSettingsResult,
+    SyncPushResult, SyncStatus, SyncGetSettingsRequest, SyncGetSettingsResult,
+    SyncUpdateSettingsRequest, SyncUpdateSettingsResult,
     CreateVariantRequest, CreateVariantResponse, CreateVersionRequest, CreateVersionResponse, DeleteLocalSkillRequest, DeleteVariantRequest,
     DeleteVersionRequest, DeleteVersionResponse, GetSkillPackageRequest, GetSkillPackageResponse,
     IdeDir, IdeSkill, ImportProjectSkillRequest, ImportRequest, InstallRequest, InstallResult,
@@ -67,6 +68,7 @@ pub fn run() {
             sync_push,
             sync_pull,
             sync_detach,
+            sync_get_settings,
             sync_update_settings
         ]);
 

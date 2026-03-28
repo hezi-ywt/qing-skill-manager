@@ -602,6 +602,19 @@ pub struct SyncDetachResult {
 
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
+pub struct SyncGetSettingsRequest {
+    pub skill_path: String,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGetSettingsResult {
+    pub sync_mode: Option<String>,
+    pub sync_branch: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncUpdateSettingsRequest {
     pub project_skill_path: String,
     pub sync_mode: String,

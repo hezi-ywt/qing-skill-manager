@@ -31,6 +31,7 @@ pub use scan::scan_project_skills;
 pub use scan::sync_push;
 pub use scan::sync_pull;
 pub use scan::sync_detach;
+pub use scan::sync_get_settings;
 pub use scan::sync_update_settings;
 pub use version::compare_skill_versions;
 pub use version::create_skill_version;
