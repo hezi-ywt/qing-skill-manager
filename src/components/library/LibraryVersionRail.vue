@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { LibrarySkill, LocalSkill, SkillPackage, SkillVersion } from "../../composables/types";
+import BaseModal from "../BaseModal.vue";
 
 const { t } = useI18n();
 
@@ -292,22 +293,27 @@ const groupedUnmanagedSources = computed(() => {
 
     </div>
 
-    <!-- Register version form -->
-    <div v-if="registeringPath" class="register-form card">
-      <div class="panel-title" style="font-size:13px;margin-bottom:8px">{{ t("library.versions.registerForm") }}</div>
-      <div class="register-field">
-        <label class="register-label">{{ t("library.versions.registerName") }}</label>
-        <input v-model="registerName" class="rename-input" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+    <!-- Register version modal -->
+    <BaseModal :show="!!registeringPath" :title="t('library.versions.registerForm')" size="small" @close="cancelRegister">
+      <div class="register-modal-body">
+        <div class="register-source">
+          <span class="register-source-label">{{ t("library.detail.path") }}</span>
+          <code class="register-source-path">{{ registeringPath }}</code>
+        </div>
+        <div class="register-field">
+          <label class="register-label">{{ t("library.versions.registerName") }}</label>
+          <input v-model="registerName" class="register-input" :placeholder="t('library.versions.registerName')" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+        </div>
+        <div class="register-field">
+          <label class="register-label">{{ t("library.versions.registerVersion") }}</label>
+          <input v-model="registerVersion" class="register-input" :placeholder="t('library.versions.registerVersion')" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+        </div>
       </div>
-      <div class="register-field">
-        <label class="register-label">{{ t("library.versions.registerVersion") }}</label>
-        <input v-model="registerVersion" class="rename-input" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
-      </div>
-      <div class="version-actions">
-        <button class="primary action-btn" @click="confirmRegister">{{ t("library.versions.registerConfirm") }}</button>
-        <button class="ghost action-btn" @click="cancelRegister">{{ t("common.cancel") }}</button>
-      </div>
-    </div>
+      <template #footer>
+        <button class="primary" :disabled="!registerName.trim()" @click="confirmRegister">{{ t("library.versions.registerConfirm") }}</button>
+        <button class="ghost" @click="cancelRegister">{{ t("common.cancel") }}</button>
+      </template>
+    </BaseModal>
   </aside>
 </template>
 
@@ -507,20 +513,60 @@ const groupedUnmanagedSources = computed(() => {
   flex: 1;
 }
 
-.register-form {
-  margin-top: 12px;
-  padding: 12px;
+.register-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.register-source {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.register-source-label {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.register-source-path {
+  font-size: 12px;
+  color: var(--color-text);
+  background: var(--color-card-bg);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-card-border);
+  word-break: break-all;
 }
 
 .register-field {
-  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .register-label {
   display: block;
-  font-size: 12px;
-  color: var(--color-muted);
-  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.register-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.register-input:focus {
+  border-color: var(--color-success-border);
 }
 
 .rename-input {
