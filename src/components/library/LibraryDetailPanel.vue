@@ -190,6 +190,21 @@ async function confirmSyncSettings() {
   syncSettingsInst.value = null;
 }
 
+// Find the project-scope installation matching a project mapping
+function getProjectInstallation(mapping: { projectPath: string }) {
+  return props.librarySkill?.installations.find(
+    (i) => i.scope === "project" && i.skillPath.startsWith(mapping.projectPath + "/")
+  ) ?? null;
+}
+
+// Open sync settings for a project mapping by finding its installation
+function openSyncSettingsForProject(mapping: { projectPath: string }) {
+  const inst = getProjectInstallation(mapping);
+  if (inst) {
+    openSyncSettings(inst);
+  }
+}
+
 // The overall sync status for the skill header tag: take the first sync-mode installation
 const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
   props.librarySkill?.installations.find((i) => i.syncMode === "sync") ?? null
@@ -315,6 +330,12 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
                 <div class="mapping-title-block">
                   <div class="card-title">{{ mapping.projectName }}</div>
                   <span class="mapping-badge" :class="getMappingBadgeClass(mapping.status)">{{ getMappingLabel(mapping.status) }}</span>
+                  <SyncStatusTag
+                    v-if="getProjectInstallation(mapping)"
+                    :sync-status="getProjectInstallation(mapping)!.syncStatus"
+                    :sync-mode="getProjectInstallation(mapping)!.syncMode"
+                    :sync-branch="getProjectInstallation(mapping)!.syncBranch"
+                  />
                 </div>
               </div>
               <div class="mapping-detail">
@@ -337,6 +358,7 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
                   <button class="ghost btn-sm" @click="$emit('cloneToProject', mapping.projectId)">{{ t("library.actions.clone") }}</button>
                 </template>
                 <template v-else>
+                  <button class="ghost btn-xs sync-settings-btn" @click="openSyncSettingsForProject(mapping)">⚙</button>
                   <button class="ghost btn-xs" @click="$emit('openDir', mapping.projectPath)">{{ t("ide.openDir") }}</button>
                   <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', mapping.projectPath + '/' + (skill?.name || ''))">{{ t("ide.uninstall") }}</button>
                 </template>
@@ -358,9 +380,14 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
             <div v-for="inst in projectInstallations" :key="inst.skillPath" class="install-entry">
               <div class="install-info">
                 <span class="install-ide">{{ inst.ideLabel }}</span>
-                <span class="mapping-badge muted">{{ inst.ideId }}</span>
+                <SyncStatusTag
+                  :sync-status="inst.syncStatus"
+                  :sync-mode="inst.syncMode"
+                  :sync-branch="inst.syncBranch"
+                />
               </div>
               <div class="install-actions">
+                <button class="ghost btn-xs sync-settings-btn" @click="openSyncSettings(inst)">⚙</button>
                 <button class="ghost btn-xs" @click="$emit('openDir', inst.skillPath)">{{ t("ide.openDir") }}</button>
                 <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', inst.skillPath)">{{ t("ide.uninstall") }}</button>
               </div>
