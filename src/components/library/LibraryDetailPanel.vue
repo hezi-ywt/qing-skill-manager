@@ -157,20 +157,6 @@ async function handleSyncPull(inst: LibraryIdeInstallation): Promise<void> {
   }
 }
 
-async function handleSyncDetach(inst: LibraryIdeInstallation): Promise<void> {
-  if (!confirm(t("sync.detachConfirm"))) return;
-  try {
-    await invoke("sync_detach", {
-      request: {
-        projectSkillPath: inst.skillPath,
-      },
-    });
-    emit("refresh");
-  } catch (e) {
-    console.error("sync_detach failed:", e);
-  }
-}
-
 // The overall sync status for the skill header tag: take the first sync-mode installation
 const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
   props.librarySkill?.installations.find((i) => i.syncMode === "sync") ?? null
@@ -265,18 +251,15 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
               <template v-if="inst.syncMode === 'sync'">
                 <button
                   v-if="inst.syncStatus === 'diverged'"
-                  class="ghost btn-xs"
+                  class="sync-action-btn push"
                   @click="handleSyncPush(inst)"
                 >{{ t("sync.pushToCenter") }}</button>
                 <button
                   v-if="inst.syncStatus === 'outdated' || inst.syncStatus === 'conflict'"
-                  class="ghost btn-xs"
+                  class="sync-action-btn pull"
                   @click="handleSyncPull(inst)"
                 >{{ t("sync.pullLatest") }}</button>
-                <button
-                  class="ghost btn-xs"
-                  @click="handleSyncDetach(inst)"
-                >{{ t("sync.detach") }}</button>
+                <span class="action-separator"></span>
               </template>
               <button class="ghost btn-xs" @click="$emit('openDir', inst.skillPath)">{{ t("ide.openDir") }}</button>
               <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', inst.skillPath)">{{ t("ide.uninstall") }}</button>
@@ -666,5 +649,37 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
+}
+
+.sync-action-btn {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sync-action-btn.push {
+  background: var(--color-chip-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-chip-border);
+}
+.sync-action-btn.push:hover {
+  background: var(--color-chip-border);
+}
+.sync-action-btn.pull {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border: 1px solid var(--color-success-border);
+}
+.sync-action-btn.pull:hover {
+  opacity: 0.85;
+}
+.action-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--color-card-border);
+  margin: 0 2px;
 }
 </style>

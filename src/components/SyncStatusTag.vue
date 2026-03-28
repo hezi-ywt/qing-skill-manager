@@ -42,31 +42,38 @@ const tagConfig = computed(() => {
 
 <style scoped>
 .sync-tag {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
+  line-height: 1.3;
 }
 .sync-tag--green {
-  background: rgba(34, 197, 94, 0.15);
-  color: #16a34a;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success-text);
 }
 .sync-tag--orange {
-  background: rgba(249, 115, 22, 0.15);
-  color: #ea580c;
+  background: var(--color-chip-bg);
+  border: 1px solid var(--color-chip-border);
+  color: var(--color-text);
 }
 .sync-tag--blue {
-  background: rgba(59, 130, 246, 0.15);
-  color: #2563eb;
+  background: var(--color-chip-bg);
+  border: 1px solid var(--color-chip-border);
+  color: var(--color-text);
 }
 .sync-tag--red {
-  background: rgba(239, 68, 68, 0.15);
-  color: #dc2626;
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error-text);
 }
 .sync-tag--gray {
-  background: rgba(107, 114, 128, 0.15);
-  color: #6b7280;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  color: var(--color-muted);
 }
 </style>
