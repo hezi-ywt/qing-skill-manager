@@ -116,7 +116,7 @@ function getSyncIcon(status: string): string {
 // Detect unregistered versions: only truly unmatched copies
 const detectedVersions = computed(() => {
   if (!props.librarySkill) return [];
-  const results: Array<{ id: string; label: string; scope: string; path: string }> = [];
+  const results: Array<{ id: string; label: string; scope: string; path: string; ide: string; status: string }> = [];
   const seenPaths = new Set<string>();
 
   // Active version IDs — soft-deleted versions are not active
@@ -147,12 +147,14 @@ const detectedVersions = computed(() => {
 
     if (!seenPaths.has(inst.skillPath)) {
       seenPaths.add(inst.skillPath);
-      const scopeLabel = inst.scope === "project" ? t("ide.scopeProject") : t("ide.scopeGlobal");
+      const status = isModified ? "modified" : isUnmanaged ? "unmanaged" : "orphaned";
       results.push({
         id: `detected_${inst.skillPath}`,
-        label: `${inst.ideLabel} (${scopeLabel})`,
+        label: inst.ideLabel,
         scope: inst.scope,
-        path: inst.skillPath
+        path: inst.skillPath,
+        ide: inst.ideLabel,
+        status,
       });
     }
   }
@@ -173,7 +175,9 @@ const detectedVersions = computed(() => {
         id: key,
         label: pm.projectName,
         scope: "project",
-        path: skillPath
+        path: skillPath,
+        ide: projectInst.ideLabel,
+        status: "conflict",
       });
     }
   }
@@ -279,15 +283,27 @@ const groupedUnmanagedSources = computed(() => {
 
       <!-- Unregistered versions (modified/conflicted copies) -->
       <article v-for="dv in detectedVersions" :key="dv.id" class="card version-card detected">
-        <button class="version-main" @click="startRegister(dv.path)">
+        <div class="version-main">
           <div class="version-header">
             <div class="card-title"><span class="repo-dot not-in-repo">○</span> {{ dv.label }}</div>
-            <span class="badge muted">{{ t("library.status.unmanaged") }}</span>
+            <span class="badge" :class="dv.status === 'conflict' ? 'danger' : dv.status === 'modified' ? 'warning' : 'muted'">
+              {{ dv.status === 'conflict' ? t("sync.conflict") : dv.status === 'modified' ? t("sync.diverged") : t("library.status.unmanaged") }}
+            </span>
           </div>
-          <div class="card-meta">{{ dv.path }}</div>
-        </button>
+          <div class="detected-detail">
+            <div class="detected-info-row">
+              <span class="detected-info-label">IDE</span>
+              <span class="detected-info-value">{{ dv.ide }}</span>
+            </div>
+            <div class="detected-info-row">
+              <span class="detected-info-label">{{ t("ide.scopeLabel") || "范围" }}</span>
+              <span class="detected-info-value">{{ dv.scope === "project" ? t("ide.scopeProject") : t("ide.scopeGlobal") }}</span>
+            </div>
+          </div>
+          <code class="detected-path">{{ dv.path }}</code>
+        </div>
         <div class="version-actions">
-          <button class="ghost action-btn" @click="startRegister(dv.path)">{{ t("library.versions.register") }}</button>
+          <button class="primary action-btn" @click="startRegister(dv.path)">{{ t("library.versions.register") }}</button>
         </div>
       </article>
 
@@ -494,8 +510,40 @@ const groupedUnmanagedSources = computed(() => {
 }
 
 .version-card.detected {
-  opacity: 0.8;
   border-style: dashed;
+  border-color: var(--color-chip-border);
+}
+
+.detected-detail {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.detected-info-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detected-info-label {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.detected-info-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.detected-path {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--color-muted);
+  word-break: break-all;
+  line-height: 1.4;
 }
 
 
