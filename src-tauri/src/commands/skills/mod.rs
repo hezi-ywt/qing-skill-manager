@@ -2757,4 +2757,65 @@ mod tests {
         assert!(sidecar.sync_branch.is_none(), "sync_branch should be None for old sidecar");
         assert!(sidecar.git_source.is_none(), "git_source should be None for old sidecar");
     }
+
+    /// sync_update_settings: change sync mode and branch via sidecar update.
+    #[test]
+    fn test_sync_update_settings() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let skill_dir = tmp.path().join("my-skill");
+        fs::create_dir_all(&skill_dir).expect("create skill dir");
+        fs::write(skill_dir.join("SKILL.md"), "---\nname: test\n---\n").expect("write");
+
+        // Write initial sidecar: sync mode, main branch
+        write_install_sidecar(&skill_dir, &InstalledSkillSidecar {
+            version_id: Some("v1".to_string()),
+            content_hash: Some("hash1".to_string()),
+            installed_at: Some(1000),
+            source_skill_id: Some("test_default".to_string()),
+            sync_mode: Some("sync".to_string()),
+            sync_branch: Some("main".to_string()),
+            git_source: None,
+        }).expect("write sidecar");
+
+        // Update to dev branch
+        let sidecar = read_install_sidecar(&skill_dir);
+        let updated = InstalledSkillSidecar {
+            sync_mode: Some("sync".to_string()),
+            sync_branch: Some("dev".to_string()),
+            ..sidecar
+        };
+        write_install_sidecar(&skill_dir, &updated).expect("write updated");
+
+        let result = read_install_sidecar(&skill_dir);
+        assert_eq!(result.sync_mode.as_deref(), Some("sync"));
+        assert_eq!(result.sync_branch.as_deref(), Some("dev"));
+        assert_eq!(result.version_id.as_deref(), Some("v1"), "other fields preserved");
+
+        // Update to independent mode
+        let sidecar2 = read_install_sidecar(&skill_dir);
+        let independent = InstalledSkillSidecar {
+            sync_mode: Some("independent".to_string()),
+            sync_branch: None,
+            ..sidecar2
+        };
+        write_install_sidecar(&skill_dir, &independent).expect("write independent");
+
+        let result2 = read_install_sidecar(&skill_dir);
+        assert_eq!(result2.sync_mode.as_deref(), Some("independent"));
+        assert!(result2.sync_branch.is_none());
+        assert_eq!(result2.version_id.as_deref(), Some("v1"), "other fields still preserved");
+
+        // Switch back to sync with custom branch
+        let sidecar3 = read_install_sidecar(&skill_dir);
+        let custom = InstalledSkillSidecar {
+            sync_mode: Some("sync".to_string()),
+            sync_branch: Some("experiment".to_string()),
+            ..sidecar3
+        };
+        write_install_sidecar(&skill_dir, &custom).expect("write custom");
+
+        let result3 = read_install_sidecar(&skill_dir);
+        assert_eq!(result3.sync_mode.as_deref(), Some("sync"));
+        assert_eq!(result3.sync_branch.as_deref(), Some("experiment"));
+    }
 }
