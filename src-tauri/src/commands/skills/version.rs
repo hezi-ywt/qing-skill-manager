@@ -23,8 +23,11 @@ pub fn create_skill_version(request: CreateVersionRequest) -> Result<CreateVersi
     let manager_dir = home.join(".qing-skill-manager/skills");
     let source_path = PathBuf::from(&request.source_path);
 
-    if !source_path.exists() || !source_path.join("SKILL.md").exists() {
-        return Err("Source skill path is invalid".to_string());
+    if !source_path.exists() {
+        return Err(format!("Source path does not exist: {}", source_path.display()));
+    }
+    if !source_path.join("SKILL.md").exists() {
+        return Err(format!("Directory does not contain SKILL.md: {}", source_path.display()));
     }
 
     let package = get_skill_package(GetSkillPackageRequest {
