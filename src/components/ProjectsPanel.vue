@@ -46,8 +46,7 @@ function toggleProjectDetails(projectId: string) {
 }
 
 function getProjectSkillDetails(projectId: string) {
-  const skills = props.projectSkillSnapshots?.[projectId] ?? [];
-  return skills.filter((skill) => skill.status === "conflict" || skill.status === "duplicate" || skill.status === "managed_version");
+  return props.projectSkillSnapshots?.[projectId] ?? [];
 }
 
 function getStatusLabel(status: string): string {
