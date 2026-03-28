@@ -27,9 +27,9 @@ const tagConfig = computed(() => {
     case "conflict":
       return { label: `${t("sync.conflict")} · ${branch}`, color: "red" };
     case "untracked":
-    case "unknown":
+      return { label: t("sync.untracked"), color: "gray" };
     default:
-      return { label: `${t("sync.synced")} · ${branch}`, color: "green" };
+      return { label: t("sync.unknown"), color: "gray" };
   }
 });
 </script>

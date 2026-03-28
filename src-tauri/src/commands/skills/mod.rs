@@ -805,19 +805,69 @@ pub(crate) fn collect_ide_skills(
             }
         } else if managed {
             // No sidecar but hash matches manager → legacy install
-            let matched_version = version_hash_map.get(&content_hash).map(|(vid, _)| vid.clone());
-            (matched_version, None, "untracked".to_string())
+            // Auto-upgrade: if central skill has only one version, write sidecar and treat as synced
+            let matched = version_hash_map.get(&content_hash);
+            let matched_version = matched.map(|(vid, _)| vid.clone());
+            let matched_skill_id = matched.map(|(_, sid)| sid.clone());
+
+            let is_single_version = matched_skill_id.as_ref().map_or(false, |sid| {
+                manager_skills.iter().any(|s| {
+                    s.current_version.as_ref().is_some_and(|v| v.skill_id == *sid) && s.version_count <= 1
+                })
+            });
+
+            if is_single_version {
+                // Auto-write sidecar: this is the only version, treat as synced · main
+                let _ = write_install_sidecar(&path, &InstalledSkillSidecar {
+                    version_id: matched_version.clone(),
+                    content_hash: Some(content_hash.clone()),
+                    installed_at: Some(now_timestamp()),
+                    source_skill_id: matched_skill_id,
+                    sync_mode: Some("sync".to_string()),
+                    sync_branch: Some("main".to_string()),
+                    git_source: None,
+                });
+                (matched_version, Some(content_hash.clone()), "synced".to_string())
+            } else {
+                (matched_version, None, "untracked".to_string())
+            }
         } else {
             // Try version_hash_map for unmanaged skills
-            if let Some((vid, _)) = version_hash_map.get(&content_hash) {
+            if let Some((vid, sid)) = version_hash_map.get(&content_hash) {
                 managed = true;
-                (Some(vid.clone()), None, "untracked".to_string())
+
+                let is_single_version = manager_skills.iter().any(|s| {
+                    s.current_version.as_ref().is_some_and(|v| v.skill_id == *sid) && s.version_count <= 1
+                });
+
+                if is_single_version {
+                    let _ = write_install_sidecar(&path, &InstalledSkillSidecar {
+                        version_id: Some(vid.clone()),
+                        content_hash: Some(content_hash.clone()),
+                        installed_at: Some(now_timestamp()),
+                        source_skill_id: Some(sid.clone()),
+                        sync_mode: Some("sync".to_string()),
+                        sync_branch: Some("main".to_string()),
+                        git_source: None,
+                    });
+                    (Some(vid.clone()), Some(content_hash.clone()), "synced".to_string())
+                } else {
+                    (Some(vid.clone()), None, "untracked".to_string())
+                }
             } else {
                 (None, None, "unknown".to_string())
             }
         };
 
         let source = if managed { "managed" } else { "local" };
+
+        // For auto-upgraded installs, sidecar was written after initial read
+        // Re-read to get the actual sync_mode/sync_branch
+        let final_sidecar = if sidecar.sync_mode.is_none() && sync_status == "synced" {
+            read_install_sidecar(&path)
+        } else {
+            sidecar
+        };
 
         skills.push(IdeSkill {
             id: path.display().to_string(),
@@ -831,8 +881,8 @@ pub(crate) fn collect_ide_skills(
             content_hash: Some(content_hash),
             installed_hash,
             sync_status,
-            sync_mode: sidecar.sync_mode.clone(),
-            sync_branch: sidecar.sync_branch.clone(),
+            sync_mode: final_sidecar.sync_mode.clone(),
+            sync_branch: final_sidecar.sync_branch.clone(),
         });
     }
 
