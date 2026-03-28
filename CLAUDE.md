@@ -21,7 +21,7 @@ pnpm typecheck            # vue-tsc --noEmit
 pnpm check:rust:fix       # cargo clippy auto-fix
 ```
 
-Frontend logic tests are plain Node.js `.mjs` files with manual assertions (no test framework). Run individual tests with `node src/composables/constants.test.mjs`. Rust tests are inline `#[cfg(test)]` modules.
+Frontend logic tests are plain Node.js `.mjs` files with manual assertions (no test framework). Run individual tests with `node src/composables/constants.test.mjs` or `node src/composables/useLibraryWorkspace.test.mjs`. Rust tests are inline `#[cfg(test)]` modules.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ Vue component → composable action → invoke("tauri_command", { request: {...}
 1. `src/App.vue` — Orchestrates tabs (Market, Library, IDE, Projects, Settings) and all modals
 2. `src/composables/useSkillsManager.ts` — Central orchestrator composing 16+ smaller composables, returns 70+ state properties/methods. Single entry point from App.vue for all business logic
 3. `src/composables/useLibraryWorkspace.ts` — Derives UI-ready data for the 3-column Library view
-4. `src-tauri/src/lib.rs` — Tauri app init, all 22 registered invoke commands listed here
+4. `src-tauri/src/lib.rs` — Tauri app init, all 26 registered invoke commands listed here
 
 ### Frontend Composable Composition Pattern
 
@@ -76,10 +76,10 @@ Types are manually kept in sync between:
 
 When adding a new command, update both files. Tauri's invoke layer handles serialization automatically.
 
-### Backend Command Groups (22 commands in lib.rs)
+### Backend Command Groups (26 commands in lib.rs)
 
 - **Market** (3): `search_marketplaces`, `download_marketplace_skill`, `update_marketplace_skill`
-- **Scan** (3): `scan_overview`, `scan_project_ide_dirs`, `scan_project_opencode_skills`
+- **Scan** (4): `scan_overview`, `scan_project_ide_dirs`, `scan_project_opencode_skills`, `scan_project_skills`
 - **Install/Uninstall** (3): `clone_local_skill`, `uninstall_skill`, `adopt_ide_skill`
 - **Import/Delete** (2): `import_local_skill`, `delete_local_skills`
 - **Versions** (7): `create_skill_version`, `delete_skill_version`, `rename_skill_version`, `set_default_skill_version`, `compare_skill_versions`, `get_skill_package`, `list_skill_packages`

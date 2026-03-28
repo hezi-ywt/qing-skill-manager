@@ -1,6 +1,6 @@
 [package]
 name = "qing-skill-manager"
-version = "0.3.25"
+version = "0.3.26"
 description = "Qing Skill Manager desktop app"
 authors = ["qing-claw"]
 edition = "2021"
@@ -29,6 +29,7 @@ walkdir = "2"
 zip = "2"
 dirs = "5"
 tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
