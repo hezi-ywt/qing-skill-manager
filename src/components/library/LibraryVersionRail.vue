@@ -61,6 +61,17 @@ function cancelRegister(): void {
   registeringPath.value = null;
 }
 
+function getSourceLabel(source: string): string {
+  const map: Record<string, string> = {
+    market: t("library.versions.sourceMarket"),
+    import: t("library.versions.sourceImport"),
+    clone: t("library.versions.sourceClone"),
+    migration: t("library.versions.sourceMigration"),
+    project: t("library.versions.sourceProject"),
+  };
+  return map[source] || source;
+}
+
 function startRename(version: SkillVersion): void {
   editingVersionId.value = version.id;
   editingName.value = version.displayName;
@@ -262,7 +273,7 @@ const groupedUnmanagedSources = computed(() => {
             </div>
           </div>
           <div class="card-meta">{{ version.version }} · {{ new Date(version.createdAt * 1000).toLocaleDateString() }}</div>
-          <div class="version-source">{{ version.source }}</div>
+          <div class="version-source">{{ getSourceLabel(version.source) }}</div>
           <div v-if="getVersionUsage(version.id).ideCount > 0 || getVersionUsage(version.id).projectCount > 0" class="version-usage">
             <span v-if="getVersionUsage(version.id).ideCount > 0" class="usage-tag">{{ t("library.globalIdes", { count: getVersionUsage(version.id).ideCount }) }}</span>
             <span v-if="getVersionUsage(version.id).projectCount > 0" class="usage-tag">{{ t("library.projectUsage", { count: getVersionUsage(version.id).projectCount }) }}</span>

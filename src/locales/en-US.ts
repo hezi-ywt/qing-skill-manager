@@ -585,7 +585,12 @@ export default {
       registerForm: "Register New Version",
       registerName: "Version Name",
       registerVersion: "Version Number",
-      registerConfirm: "Confirm"
+      registerConfirm: "Confirm",
+      sourceMarket: "Marketplace",
+      sourceImport: "Imported",
+      sourceClone: "Installed",
+      sourceMigration: "Initial",
+      sourceProject: "Project"
     },
     variants: {
       title: "Variants",

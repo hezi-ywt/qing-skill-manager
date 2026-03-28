@@ -585,7 +585,12 @@ export default {
       registerForm: "注册新版本",
       registerName: "版本名称",
       registerVersion: "版本号",
-      registerConfirm: "确认注册"
+      registerConfirm: "确认注册",
+      sourceMarket: "市场下载",
+      sourceImport: "手动导入",
+      sourceClone: "安装复制",
+      sourceMigration: "初始版本",
+      sourceProject: "项目来源"
     },
     variants: {
       title: "变体",
