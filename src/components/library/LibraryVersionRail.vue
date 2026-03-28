@@ -32,11 +32,16 @@ const editingName = ref("");
 const registeringPath = ref<string | null>(null);
 const registerName = ref("");
 const registerVersion = ref("");
+const registerBranch = ref("main");
+const registerCustomBranch = ref("");
+const builtinBranches = ["main", "dev", "stable"];
 
 function startRegister(sourcePath: string): void {
   registeringPath.value = sourcePath;
   registerName.value = "";
   registerVersion.value = "";
+  registerBranch.value = "main";
+  registerCustomBranch.value = "";
   // Auto-suggest next version
   const active = sortedVersions.value;
   const latest = active[0]?.version || "1.0.0";
@@ -316,13 +321,41 @@ const groupedUnmanagedSources = computed(() => {
           <span class="register-source-label">{{ t("library.detail.path") }}</span>
           <code class="register-source-path">{{ registeringPath }}</code>
         </div>
-        <div class="register-field">
-          <label class="register-label">{{ t("library.versions.registerName") }}</label>
-          <input v-model="registerName" class="register-input" :placeholder="t('library.versions.registerName')" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+        <div class="register-row">
+          <div class="register-field register-field--half">
+            <label class="register-label">{{ t("library.versions.registerName") }}</label>
+            <input v-model="registerName" class="register-input" :placeholder="t('library.versions.registerName')" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+          </div>
+          <div class="register-field register-field--half">
+            <label class="register-label">{{ t("library.versions.registerVersion") }}</label>
+            <input v-model="registerVersion" class="register-input" :placeholder="t('library.versions.registerVersion')" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+          </div>
         </div>
         <div class="register-field">
-          <label class="register-label">{{ t("library.versions.registerVersion") }}</label>
-          <input v-model="registerVersion" class="register-input" :placeholder="t('library.versions.registerVersion')" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+          <label class="register-label">{{ t("installModal.syncBranch") }}</label>
+          <div class="register-branch-row">
+            <button
+              v-for="b in builtinBranches"
+              :key="b"
+              class="branch-chip"
+              :class="{ active: registerBranch === b }"
+              @click="registerBranch = b"
+            >{{ b }}</button>
+            <button
+              class="branch-chip"
+              :class="{ active: registerBranch === '__custom__' }"
+              @click="registerBranch = '__custom__'"
+            >{{ t("installModal.customBranch") }}</button>
+          </div>
+          <input
+            v-if="registerBranch === '__custom__'"
+            v-model="registerCustomBranch"
+            class="register-input"
+            style="margin-top: 8px;"
+            :placeholder="t('installModal.customBranchPlaceholder')"
+            @keydown.enter="confirmRegister"
+            @keydown.escape="cancelRegister"
+          />
         </div>
       </div>
       <template #footer>
@@ -615,6 +648,44 @@ const groupedUnmanagedSources = computed(() => {
 
 .register-input:focus {
   border-color: var(--color-success-border);
+}
+
+.register-row {
+  display: flex;
+  gap: 12px;
+}
+
+.register-field--half {
+  flex: 1;
+  min-width: 0;
+}
+
+.register-branch-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.branch-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--color-card-border);
+  background: var(--color-card-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-chip:hover {
+  border-color: var(--color-chip-border);
+}
+
+.branch-chip.active {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .rename-input {
