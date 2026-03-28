@@ -810,7 +810,7 @@ pub(crate) fn collect_ide_skills(
             let matched_version = matched.map(|(vid, _)| vid.clone());
             let matched_skill_id = matched.map(|(_, sid)| sid.clone());
 
-            let is_single_version = matched_skill_id.as_ref().map_or(false, |sid| {
+            let is_single_version = matched_skill_id.as_ref().is_some_and(|sid| {
                 manager_skills.iter().any(|s| {
                     s.current_version.as_ref().is_some_and(|v| v.skill_id == *sid) && s.version_count <= 1
                 })
