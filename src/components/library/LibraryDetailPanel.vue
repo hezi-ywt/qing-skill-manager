@@ -73,19 +73,6 @@ const selectedVersionName = computed(() => {
   return v?.displayName || null;
 });
 
-function getSyncBadgeClass(status: string): string {
-  if (status === "synced" || status === "untracked") return "success";
-  if (status === "modified") return "warning";
-  return "muted";
-}
-
-function getSyncLabel(status: string): string {
-  if (status === "synced" || status === "untracked") return t("library.syncSynced");
-  if (status === "modified") return t("library.syncModified");
-  return t("library.syncUnknown");
-}
-
-
 
 const cloneProjects = computed(() => {
   if (!props.projects.length) {
@@ -154,6 +141,21 @@ async function handleSyncPull(inst: LibraryIdeInstallation): Promise<void> {
     emit("refresh");
   } catch (e) {
     console.error("sync_pull failed:", e);
+  }
+}
+
+async function handleSyncUpdateSettings(inst: LibraryIdeInstallation, syncMode: string, syncBranch: string): Promise<void> {
+  try {
+    await invoke("sync_update_settings", {
+      request: {
+        projectSkillPath: inst.skillPath,
+        syncMode,
+        syncBranch: syncMode === "independent" ? null : (syncBranch || "main"),
+      },
+    });
+    emit("refresh");
+  } catch (e) {
+    console.error("sync_update_settings failed:", e);
   }
 }
 
@@ -239,12 +241,12 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
           <div v-for="inst in globalInstallations" :key="inst.skillPath" class="install-entry">
             <div class="install-info">
               <span class="install-ide">{{ inst.ideLabel }}</span>
-              <span v-if="inst.syncMode !== 'sync'" class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
               <SyncStatusTag
-                v-if="inst.syncMode === 'sync'"
                 :sync-status="inst.syncStatus"
                 :sync-mode="inst.syncMode"
                 :sync-branch="inst.syncBranch"
+                editable
+                @update="(mode: string, branch: string) => handleSyncUpdateSettings(inst, mode, branch)"
               />
             </div>
             <div class="install-actions">

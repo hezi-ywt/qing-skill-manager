@@ -11,6 +11,7 @@ use crate::types::{
     SkillVersionSource, ScanProjectSkillsRequest, UninstallRequest,
     SyncPushRequest, SyncPushResult, SyncPullRequest, SyncPullResult,
     SyncDetachRequest, SyncDetachResult,
+    SyncUpdateSettingsRequest, SyncUpdateSettingsResult,
 };
 use crate::utils::download::copy_dir_recursive;
 use crate::utils::path::{normalize_path, resolve_canonical, resolve_or_normalize, sanitize_dir_name};
@@ -900,5 +901,30 @@ pub fn sync_detach(request: SyncDetachRequest) -> Result<SyncDetachResult, Strin
     Ok(SyncDetachResult {
         success: true,
         message: "Skill detached from sync tracking".to_string(),
+    })
+}
+
+/// Update sync settings (mode and branch) for an installed skill
+#[tauri::command]
+pub fn sync_update_settings(request: SyncUpdateSettingsRequest) -> Result<SyncUpdateSettingsResult, String> {
+    let home = dirs::home_dir().ok_or("Unable to determine the home directory")?;
+
+    let project_skill_path = PathBuf::from(&request.project_skill_path);
+    if !project_skill_path.exists() {
+        return Err("Project skill path does not exist".to_string());
+    }
+    validate_project_skill_path(&project_skill_path, &home)?;
+
+    let sidecar = read_install_sidecar(&project_skill_path);
+    let updated_sidecar = InstalledSkillSidecar {
+        sync_mode: Some(request.sync_mode),
+        sync_branch: request.sync_branch,
+        ..sidecar
+    };
+    write_install_sidecar(&project_skill_path, &updated_sidecar)?;
+
+    Ok(SyncUpdateSettingsResult {
+        success: true,
+        message: "Sync settings updated".to_string(),
     })
 }

@@ -616,5 +616,9 @@ export default {
     pushSuccess: "Pushed to central",
     pullSuccess: "Pulled latest version",
     detachSuccess: "Stopped following",
+    editSettings: "Sync Settings",
+    confirm: "Confirm",
+    cancel: "Cancel",
+    settingsUpdated: "Sync settings updated",
   },
 };

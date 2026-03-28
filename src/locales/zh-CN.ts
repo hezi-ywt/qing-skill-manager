@@ -616,5 +616,9 @@ export default {
     pushSuccess: "已更新到主库",
     pullSuccess: "已获取最新版本",
     detachSuccess: "已停止跟随",
+    editSettings: "同步设置",
+    confirm: "确认",
+    cancel: "取消",
+    settingsUpdated: "同步设置已更新",
   },
 };

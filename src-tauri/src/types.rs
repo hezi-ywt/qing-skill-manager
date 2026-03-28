@@ -600,6 +600,21 @@ pub struct SyncDetachResult {
     pub message: String,
 }
 
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncUpdateSettingsRequest {
+    pub project_skill_path: String,
+    pub sync_mode: String,
+    pub sync_branch: Option<String>,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncUpdateSettingsResult {
+    pub success: bool,
+    pub message: String,
+}
+
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateVersionResponse {
