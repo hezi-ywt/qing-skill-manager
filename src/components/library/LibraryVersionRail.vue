@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { LibrarySkill, LocalSkill, SkillPackage, SkillVersion } from "../../composables/types";
+import BaseModal from "../BaseModal.vue";
 
 const { t } = useI18n();
 
@@ -31,11 +32,16 @@ const editingName = ref("");
 const registeringPath = ref<string | null>(null);
 const registerName = ref("");
 const registerVersion = ref("");
+const registerBranch = ref("main");
+const registerCustomBranch = ref("");
+const builtinBranches = ["main", "dev", "stable"];
 
 function startRegister(sourcePath: string): void {
   registeringPath.value = sourcePath;
   registerName.value = "";
   registerVersion.value = "";
+  registerBranch.value = "main";
+  registerCustomBranch.value = "";
   // Auto-suggest next version
   const active = sortedVersions.value;
   const latest = active[0]?.version || "1.0.0";
@@ -53,6 +59,17 @@ function confirmRegister(): void {
 
 function cancelRegister(): void {
   registeringPath.value = null;
+}
+
+function getSourceLabel(source: string): string {
+  const map: Record<string, string> = {
+    market: t("library.versions.sourceMarket"),
+    import: t("library.versions.sourceImport"),
+    clone: t("library.versions.sourceClone"),
+    migration: t("library.versions.sourceMigration"),
+    project: t("library.versions.sourceProject"),
+  };
+  return map[source] || source;
 }
 
 function startRename(version: SkillVersion): void {
@@ -115,7 +132,7 @@ function getSyncIcon(status: string): string {
 // Detect unregistered versions: only truly unmatched copies
 const detectedVersions = computed(() => {
   if (!props.librarySkill) return [];
-  const results: Array<{ id: string; label: string; scope: string; path: string }> = [];
+  const results: Array<{ id: string; label: string; scope: string; path: string; ide: string; status: string }> = [];
   const seenPaths = new Set<string>();
 
   // Active version IDs — soft-deleted versions are not active
@@ -146,12 +163,14 @@ const detectedVersions = computed(() => {
 
     if (!seenPaths.has(inst.skillPath)) {
       seenPaths.add(inst.skillPath);
-      const scopeLabel = inst.scope === "project" ? t("ide.scopeProject") : t("ide.scopeGlobal");
+      const status = isModified ? "modified" : isUnmanaged ? "unmanaged" : "orphaned";
       results.push({
         id: `detected_${inst.skillPath}`,
-        label: `${inst.ideLabel} (${scopeLabel})`,
+        label: inst.ideLabel,
         scope: inst.scope,
-        path: inst.skillPath
+        path: inst.skillPath,
+        ide: inst.ideLabel,
+        status,
       });
     }
   }
@@ -163,7 +182,8 @@ const detectedVersions = computed(() => {
     const projectInst = props.librarySkill.installations.find(
       (i) => i.scope === "project" && i.skillPath.startsWith(pm.projectPath + "/")
     );
-    const skillPath = projectInst?.skillPath || pm.projectPath;
+    if (!projectInst) continue; // Skip if no actual skill installation found
+    const skillPath = projectInst.skillPath;
     const key = `project_${pm.projectId}`;
     if (!seenPaths.has(key)) {
       seenPaths.add(key);
@@ -171,7 +191,9 @@ const detectedVersions = computed(() => {
         id: key,
         label: pm.projectName,
         scope: "project",
-        path: skillPath
+        path: skillPath,
+        ide: projectInst.ideLabel,
+        status: "conflict",
       });
     }
   }
@@ -251,7 +273,7 @@ const groupedUnmanagedSources = computed(() => {
             </div>
           </div>
           <div class="card-meta">{{ version.version }} · {{ new Date(version.createdAt * 1000).toLocaleDateString() }}</div>
-          <div class="version-source">{{ version.source }}</div>
+          <div class="version-source">{{ getSourceLabel(version.source) }}</div>
           <div v-if="getVersionUsage(version.id).ideCount > 0 || getVersionUsage(version.id).projectCount > 0" class="version-usage">
             <span v-if="getVersionUsage(version.id).ideCount > 0" class="usage-tag">{{ t("library.globalIdes", { count: getVersionUsage(version.id).ideCount }) }}</span>
             <span v-if="getVersionUsage(version.id).projectCount > 0" class="usage-tag">{{ t("library.projectUsage", { count: getVersionUsage(version.id).projectCount }) }}</span>
@@ -277,36 +299,81 @@ const groupedUnmanagedSources = computed(() => {
 
       <!-- Unregistered versions (modified/conflicted copies) -->
       <article v-for="dv in detectedVersions" :key="dv.id" class="card version-card detected">
-        <button class="version-main" @click="startRegister(dv.path)">
+        <div class="version-main">
           <div class="version-header">
             <div class="card-title"><span class="repo-dot not-in-repo">○</span> {{ dv.label }}</div>
-            <span class="badge muted">{{ t("library.status.unmanaged") }}</span>
+            <span class="badge" :class="dv.status === 'conflict' ? 'danger' : dv.status === 'modified' ? 'warning' : 'muted'">
+              {{ dv.status === 'conflict' ? t("sync.conflict") : dv.status === 'modified' ? t("sync.diverged") : t("library.status.unmanaged") }}
+            </span>
           </div>
-          <div class="card-meta">{{ dv.path }}</div>
-        </button>
+          <div class="detected-detail">
+            <div class="detected-info-row">
+              <span class="detected-info-label">IDE</span>
+              <span class="detected-info-value">{{ dv.ide }}</span>
+            </div>
+            <div class="detected-info-row">
+              <span class="detected-info-label">{{ t("ide.scopeLabel") }}</span>
+              <span class="detected-info-value">{{ dv.scope === "project" ? t("ide.scopeProject") : t("ide.scopeGlobal") }}</span>
+            </div>
+          </div>
+          <code class="detected-path">{{ dv.path }}</code>
+        </div>
         <div class="version-actions">
-          <button class="ghost action-btn" @click="startRegister(dv.path)">{{ t("library.versions.register") }}</button>
+          <button class="primary action-btn" @click="startRegister(dv.path)">{{ t("library.versions.register") }}</button>
         </div>
       </article>
 
     </div>
 
-    <!-- Register version form -->
-    <div v-if="registeringPath" class="register-form card">
-      <div class="panel-title" style="font-size:13px;margin-bottom:8px">{{ t("library.versions.registerForm") }}</div>
-      <div class="register-field">
-        <label class="register-label">{{ t("library.versions.registerName") }}</label>
-        <input v-model="registerName" class="rename-input" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+    <!-- Register version modal -->
+    <BaseModal :show="!!registeringPath" :title="t('library.versions.registerForm')" size="small" @close="cancelRegister">
+      <div class="register-modal-body">
+        <div class="register-source">
+          <span class="register-source-label">{{ t("library.detail.path") }}</span>
+          <code class="register-source-path">{{ registeringPath }}</code>
+        </div>
+        <div class="register-row">
+          <div class="register-field register-field--half">
+            <label class="register-label">{{ t("library.versions.registerName") }}</label>
+            <input v-model="registerName" class="register-input" :placeholder="t('library.versions.registerName')" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+          </div>
+          <div class="register-field register-field--half">
+            <label class="register-label">{{ t("library.versions.registerVersion") }}</label>
+            <input v-model="registerVersion" class="register-input" :placeholder="t('library.versions.registerVersion')" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
+          </div>
+        </div>
+        <div class="register-field">
+          <label class="register-label">{{ t("installModal.syncBranch") }}</label>
+          <div class="register-branch-row">
+            <button
+              v-for="b in builtinBranches"
+              :key="b"
+              class="branch-chip"
+              :class="{ active: registerBranch === b }"
+              @click="registerBranch = b"
+            >{{ b }}</button>
+            <button
+              class="branch-chip"
+              :class="{ active: registerBranch === '__custom__' }"
+              @click="registerBranch = '__custom__'"
+            >{{ t("installModal.customBranch") }}</button>
+          </div>
+          <input
+            v-if="registerBranch === '__custom__'"
+            v-model="registerCustomBranch"
+            class="register-input"
+            style="margin-top: 8px;"
+            :placeholder="t('installModal.customBranchPlaceholder')"
+            @keydown.enter="confirmRegister"
+            @keydown.escape="cancelRegister"
+          />
+        </div>
       </div>
-      <div class="register-field">
-        <label class="register-label">{{ t("library.versions.registerVersion") }}</label>
-        <input v-model="registerVersion" class="rename-input" @keydown.enter="confirmRegister" @keydown.escape="cancelRegister" />
-      </div>
-      <div class="version-actions">
-        <button class="primary action-btn" @click="confirmRegister">{{ t("library.versions.registerConfirm") }}</button>
-        <button class="ghost action-btn" @click="cancelRegister">{{ t("common.cancel") }}</button>
-      </div>
-    </div>
+      <template #footer>
+        <button class="primary" :disabled="!registerName.trim()" @click="confirmRegister">{{ t("library.versions.registerConfirm") }}</button>
+        <button class="ghost" @click="cancelRegister">{{ t("common.cancel") }}</button>
+      </template>
+    </BaseModal>
   </aside>
 </template>
 
@@ -487,8 +554,40 @@ const groupedUnmanagedSources = computed(() => {
 }
 
 .version-card.detected {
-  opacity: 0.8;
   border-style: dashed;
+  border-color: var(--color-chip-border);
+}
+
+.detected-detail {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.detected-info-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detected-info-label {
+  font-size: 11px;
+  color: var(--color-muted);
+}
+
+.detected-info-value {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.detected-path {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--color-muted);
+  word-break: break-all;
+  line-height: 1.4;
 }
 
 
@@ -506,20 +605,98 @@ const groupedUnmanagedSources = computed(() => {
   flex: 1;
 }
 
-.register-form {
-  margin-top: 12px;
-  padding: 12px;
+.register-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.register-source {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.register-source-label {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.register-source-path {
+  font-size: 12px;
+  color: var(--color-text);
+  background: var(--color-card-bg);
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-card-border);
+  word-break: break-all;
 }
 
 .register-field {
-  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .register-label {
   display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.register-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.register-input:focus {
+  border-color: var(--color-success-border);
+}
+
+.register-row {
+  display: flex;
+  gap: 12px;
+}
+
+.register-field--half {
+  flex: 1;
+  min-width: 0;
+}
+
+.register-branch-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.branch-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
   font-size: 12px;
-  color: var(--color-muted);
-  margin-bottom: 4px;
+  font-weight: 500;
+  border: 1px solid var(--color-card-border);
+  background: var(--color-card-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.branch-chip:hover {
+  border-color: var(--color-chip-border);
+}
+
+.branch-chip.active {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .rename-input {

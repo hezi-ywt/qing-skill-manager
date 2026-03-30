@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import type { ProjectConfig, LocalSkill, IdeOption, ProjectSkill } from "../composables/types";
 import { useI18n } from "vue-i18n";
 
@@ -46,8 +47,67 @@ function toggleProjectDetails(projectId: string) {
 }
 
 function getProjectSkillDetails(projectId: string) {
-  const skills = props.projectSkillSnapshots?.[projectId] ?? [];
-  return skills.filter((skill) => skill.status === "conflict" || skill.status === "duplicate" || skill.status === "managed_version");
+  return props.projectSkillSnapshots?.[projectId] ?? [];
+}
+
+// Sync settings popover
+const syncSettingsSkill = ref<ProjectSkill | null>(null);
+const syncEditMode = ref<"sync" | "independent">("sync");
+const syncEditBranch = ref("main");
+const syncCustomBranch = ref("");
+const builtinBranches = ["main", "dev", "stable"];
+
+async function openSkillSyncSettings(skill: ProjectSkill) {
+  syncSettingsSkill.value = skill;
+  // Read current settings from sidecar
+  try {
+    const result = await invoke("sync_get_settings", { request: { skillPath: skill.path } }) as { syncMode: string | null; syncBranch: string | null };
+    syncEditMode.value = (result.syncMode as "sync" | "independent") || "sync";
+    const branch = result.syncBranch || "main";
+    if (builtinBranches.includes(branch)) {
+      syncEditBranch.value = branch;
+      syncCustomBranch.value = "";
+    } else {
+      syncEditBranch.value = "__custom__";
+      syncCustomBranch.value = branch;
+    }
+  } catch {
+    syncEditMode.value = "sync";
+    syncEditBranch.value = "main";
+    syncCustomBranch.value = "";
+  }
+}
+
+function closeSkillSyncSettings() {
+  syncSettingsSkill.value = null;
+}
+
+async function confirmSkillSyncSettings() {
+  if (!syncSettingsSkill.value) return;
+  const branch = syncEditBranch.value === "__custom__" ? syncCustomBranch.value : syncEditBranch.value;
+  try {
+    await invoke("sync_update_settings", {
+      request: {
+        projectSkillPath: syncSettingsSkill.value.path,
+        syncMode: syncEditMode.value,
+        syncBranch: syncEditMode.value === "independent" ? null : (branch || "main"),
+      },
+    });
+  } catch (e) {
+    console.error("sync_update_settings failed:", e);
+  }
+  syncSettingsSkill.value = null;
+}
+
+function getStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    conflict: t("projects.statusConflict"),
+    duplicate: t("projects.statusSynced"),
+    managed_version: t("projects.statusManagedVersion"),
+    new: t("projects.statusNew"),
+    unmanaged: t("projects.statusUnmanaged"),
+  };
+  return map[status] || status;
 }
 </script>
 
@@ -119,13 +179,72 @@ function getProjectSkillDetails(projectId: string) {
           <div v-for="skill in getProjectSkillDetails(project.id)" :key="skill.path" class="detail-item">
             <div class="detail-name-row">
               <span class="detail-name">{{ skill.name }}</span>
-              <span class="detail-status" :class="skill.status">{{ skill.status }}</span>
+              <span class="detail-status" :class="skill.status">{{ getStatusLabel(skill.status) }}</span>
+              <button class="ghost btn-xs sync-settings-btn" @click.stop="openSkillSyncSettings(skill)">⚙</button>
             </div>
             <div class="detail-path">{{ skill.path }}</div>
           </div>
         </div>
       </div>
     </div>
+    <!-- Sync Settings Popover -->
+    <Teleport to="body">
+      <div v-if="syncSettingsSkill" class="popover-overlay" @click.self="closeSkillSyncSettings">
+        <div class="sync-popover">
+          <div class="popover-title">{{ t("sync.editSettings") }}</div>
+          <div class="popover-inst-info">
+            <span class="popover-ide-name">{{ syncSettingsSkill.name }}</span>
+            <span class="popover-path">{{ syncSettingsSkill.path }}</span>
+          </div>
+
+          <div class="popover-section">
+            <div class="popover-label">{{ t("installModal.syncBranch") }}</div>
+            <div class="popover-chips">
+              <button
+                v-for="b in builtinBranches"
+                :key="b"
+                class="branch-chip"
+                :class="{ active: syncEditBranch === b && syncEditMode === 'sync' }"
+                :disabled="syncEditMode === 'independent'"
+                @click="syncEditBranch = b"
+              >{{ b }}</button>
+              <button
+                class="branch-chip"
+                :class="{ active: syncEditBranch === '__custom__' && syncEditMode === 'sync' }"
+                :disabled="syncEditMode === 'independent'"
+                @click="syncEditBranch = '__custom__'"
+              >{{ t("installModal.customBranch") }}</button>
+            </div>
+            <input
+              v-if="syncEditBranch === '__custom__' && syncEditMode === 'sync'"
+              v-model="syncCustomBranch"
+              class="popover-input"
+              :placeholder="t('installModal.customBranchPlaceholder')"
+              @keydown.enter="confirmSkillSyncSettings"
+            />
+          </div>
+
+          <div class="popover-section">
+            <div class="popover-label">{{ t("installModal.syncOptions") }}</div>
+            <div class="popover-mode-row">
+              <label class="mode-option" :class="{ active: syncEditMode === 'sync' }">
+                <input type="radio" v-model="syncEditMode" value="sync" />
+                {{ t("installModal.syncMode") }}
+              </label>
+              <label class="mode-option" :class="{ active: syncEditMode === 'independent' }">
+                <input type="radio" v-model="syncEditMode" value="independent" />
+                {{ t("installModal.independentMode") }}
+              </label>
+            </div>
+          </div>
+
+          <div class="popover-actions">
+            <button class="primary btn-sm" @click="confirmSkillSyncSettings">{{ t("sync.confirm") }}</button>
+            <button class="ghost btn-sm" @click="closeSkillSyncSettings">{{ t("sync.cancel") }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </section>
 </template>
 
@@ -314,5 +433,137 @@ function getProjectSkillDetails(projectId: string) {
   font-size: 11px;
   color: var(--color-muted);
   margin-top: 2px;
+}
+
+.sync-settings-btn {
+  font-size: 13px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+  margin-left: auto;
+}
+.sync-settings-btn:hover {
+  opacity: 1;
+}
+
+.popover-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.15);
+}
+.sync-popover {
+  background: var(--color-panel-bg, #fff);
+  border: 1px solid var(--color-card-border);
+  border-radius: 12px;
+  padding: 20px;
+  width: 320px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.popover-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 12px;
+}
+.popover-inst-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 16px;
+  padding: 8px 10px;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+}
+.popover-ide-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.popover-path {
+  font-size: 11px;
+  color: var(--color-muted);
+  word-break: break-all;
+}
+.popover-section {
+  margin-bottom: 14px;
+}
+.popover-label {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-bottom: 6px;
+}
+.popover-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.branch-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--color-card-border);
+  background: var(--color-card-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.branch-chip:hover:not(:disabled) {
+  border-color: var(--color-chip-border);
+}
+.branch-chip.active {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+}
+.branch-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.popover-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text);
+  outline: none;
+}
+.popover-input:focus {
+  border-color: var(--color-success-border);
+}
+.popover-mode-row {
+  display: flex;
+  gap: 8px;
+}
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-card-border);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mode-option.active {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+}
+.mode-option input[type="radio"] {
+  accent-color: var(--color-success-text);
+}
+.popover-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 </style>

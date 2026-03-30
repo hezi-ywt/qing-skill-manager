@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { invoke } from "@tauri-apps/api/core";
 import SyncStatusTag from "../SyncStatusTag.vue";
@@ -73,19 +73,6 @@ const selectedVersionName = computed(() => {
   return v?.displayName || null;
 });
 
-function getSyncBadgeClass(status: string): string {
-  if (status === "synced" || status === "untracked") return "success";
-  if (status === "modified") return "warning";
-  return "muted";
-}
-
-function getSyncLabel(status: string): string {
-  if (status === "synced" || status === "untracked") return t("library.syncSynced");
-  if (status === "modified") return t("library.syncModified");
-  return t("library.syncUnknown");
-}
-
-
 
 const cloneProjects = computed(() => {
   if (!props.projects.length) {
@@ -157,17 +144,93 @@ async function handleSyncPull(inst: LibraryIdeInstallation): Promise<void> {
   }
 }
 
-async function handleSyncDetach(inst: LibraryIdeInstallation): Promise<void> {
-  if (!confirm(t("sync.detachConfirm"))) return;
+async function handleSyncUpdateSettings(inst: LibraryIdeInstallation, syncMode: string, syncBranch: string): Promise<void> {
   try {
-    await invoke("sync_detach", {
+    await invoke("sync_update_settings", {
       request: {
         projectSkillPath: inst.skillPath,
+        syncMode,
+        syncBranch: syncMode === "independent" ? null : (syncBranch || "main"),
       },
     });
     emit("refresh");
   } catch (e) {
-    console.error("sync_detach failed:", e);
+    console.error("sync_update_settings failed:", e);
+  }
+}
+
+// Sync settings popover state
+const syncSettingsInst = ref<LibraryIdeInstallation | null>(null);
+const syncEditMode = ref<"sync" | "independent">("sync");
+const syncEditBranch = ref("main");
+const syncCustomBranch = ref("");
+const builtinBranches = ["main", "dev", "stable"];
+
+async function openSyncSettings(inst: LibraryIdeInstallation) {
+  syncSettingsInst.value = inst;
+  // Read current settings from sidecar (more reliable than cached inst data)
+  try {
+    const result = await invoke("sync_get_settings", { request: { skillPath: inst.skillPath } }) as { syncMode: string | null; syncBranch: string | null };
+    syncEditMode.value = (result.syncMode as "sync" | "independent") || "sync";
+    const branch = result.syncBranch || "main";
+    if (builtinBranches.includes(branch)) {
+      syncEditBranch.value = branch;
+      syncCustomBranch.value = "";
+    } else {
+      syncEditBranch.value = "__custom__";
+      syncCustomBranch.value = branch;
+    }
+  } catch {
+    syncEditMode.value = (inst.syncMode as "sync" | "independent") || "sync";
+    const branch = inst.syncBranch || "main";
+    if (builtinBranches.includes(branch)) {
+      syncEditBranch.value = branch;
+      syncCustomBranch.value = "";
+    } else {
+      syncEditBranch.value = "__custom__";
+      syncCustomBranch.value = branch;
+    }
+  }
+}
+
+function closeSyncSettings() {
+  syncSettingsInst.value = null;
+}
+
+async function confirmSyncSettings() {
+  if (!syncSettingsInst.value) return;
+  const branch = syncEditBranch.value === "__custom__" ? syncCustomBranch.value : syncEditBranch.value;
+  await handleSyncUpdateSettings(syncSettingsInst.value, syncEditMode.value, branch);
+  syncSettingsInst.value = null;
+}
+
+// Find the project-scope installation matching a project mapping
+function getProjectInstallation(mapping: { projectPath: string }) {
+  return props.librarySkill?.installations.find(
+    (i) => i.scope === "project" && i.skillPath.startsWith(mapping.projectPath + "/")
+  ) ?? null;
+}
+
+// Open sync settings for a project mapping by finding its installation
+function openSyncSettingsForProject(mapping: { projectPath: string; projectName: string; ideTargets: string[] }) {
+  const inst = getProjectInstallation(mapping);
+  if (inst) {
+    openSyncSettings(inst);
+  } else {
+    // No matching installation found — construct a minimal one for sidecar operations
+    const skillName = props.skill?.name || "";
+    const skillPath = mapping.projectPath + "/" + skillName;
+    openSyncSettings({
+      ideId: mapping.ideTargets[0] || "unknown",
+      ideLabel: mapping.ideTargets[0] || "unknown",
+      skillPath,
+      scope: "project",
+      isManaged: true,
+      versionId: null,
+      syncStatus: "unknown",
+      syncMode: null,
+      syncBranch: null,
+    } as LibraryIdeInstallation);
   }
 }
 
@@ -246,16 +309,14 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
       <section class="panel section-panel">
         <div class="section-title-row">
           <div class="panel-title section-title-text">{{ t("library.globalInstallations") }}</div>
-          <div class="hint">{{ globalInstallations.length > 0 ? `${globalInstallations.length} IDE` : "" }}</div>
+          <div class="hint">{{ globalInstallations.length > 0 ? t("library.ideCount", { count: globalInstallations.length }) : "" }}</div>
         </div>
         <div v-if="globalInstallations.length === 0" class="hint">{{ selectedVersionId ? t("library.noInstallForVersion") : t("library.notInstalled") }}</div>
         <div v-else class="install-list">
           <div v-for="inst in globalInstallations" :key="inst.skillPath" class="install-entry">
             <div class="install-info">
               <span class="install-ide">{{ inst.ideLabel }}</span>
-              <span v-if="inst.syncMode !== 'sync'" class="mapping-badge" :class="getSyncBadgeClass(inst.syncStatus)">{{ getSyncLabel(inst.syncStatus) }}</span>
               <SyncStatusTag
-                v-if="inst.syncMode === 'sync'"
                 :sync-status="inst.syncStatus"
                 :sync-mode="inst.syncMode"
                 :sync-branch="inst.syncBranch"
@@ -265,19 +326,17 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
               <template v-if="inst.syncMode === 'sync'">
                 <button
                   v-if="inst.syncStatus === 'diverged'"
-                  class="ghost btn-xs"
+                  class="sync-action-btn push"
                   @click="handleSyncPush(inst)"
                 >{{ t("sync.pushToCenter") }}</button>
                 <button
                   v-if="inst.syncStatus === 'outdated' || inst.syncStatus === 'conflict'"
-                  class="ghost btn-xs"
+                  class="sync-action-btn pull"
                   @click="handleSyncPull(inst)"
                 >{{ t("sync.pullLatest") }}</button>
-                <button
-                  class="ghost btn-xs"
-                  @click="handleSyncDetach(inst)"
-                >{{ t("sync.detach") }}</button>
+                <span class="action-separator"></span>
               </template>
+              <button class="ghost btn-xs sync-settings-btn" @click="openSyncSettings(inst)">⚙</button>
               <button class="ghost btn-xs" @click="$emit('openDir', inst.skillPath)">{{ t("ide.openDir") }}</button>
               <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', inst.skillPath)">{{ t("ide.uninstall") }}</button>
             </div>
@@ -300,6 +359,12 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
                 <div class="mapping-title-block">
                   <div class="card-title">{{ mapping.projectName }}</div>
                   <span class="mapping-badge" :class="getMappingBadgeClass(mapping.status)">{{ getMappingLabel(mapping.status) }}</span>
+                  <SyncStatusTag
+                    v-if="getProjectInstallation(mapping)"
+                    :sync-status="getProjectInstallation(mapping)!.syncStatus"
+                    :sync-mode="getProjectInstallation(mapping)!.syncMode"
+                    :sync-branch="getProjectInstallation(mapping)!.syncBranch"
+                  />
                 </div>
               </div>
               <div class="mapping-detail">
@@ -322,6 +387,7 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
                   <button class="ghost btn-sm" @click="$emit('cloneToProject', mapping.projectId)">{{ t("library.actions.clone") }}</button>
                 </template>
                 <template v-else>
+                  <button class="ghost btn-xs sync-settings-btn" @click="openSyncSettingsForProject(mapping)">⚙</button>
                   <button class="ghost btn-xs" @click="$emit('openDir', mapping.projectPath)">{{ t("ide.openDir") }}</button>
                   <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', mapping.projectPath + '/' + (skill?.name || ''))">{{ t("ide.uninstall") }}</button>
                 </template>
@@ -343,9 +409,14 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
             <div v-for="inst in projectInstallations" :key="inst.skillPath" class="install-entry">
               <div class="install-info">
                 <span class="install-ide">{{ inst.ideLabel }}</span>
-                <span class="mapping-badge muted">{{ inst.ideId }}</span>
+                <SyncStatusTag
+                  :sync-status="inst.syncStatus"
+                  :sync-mode="inst.syncMode"
+                  :sync-branch="inst.syncBranch"
+                />
               </div>
               <div class="install-actions">
+                <button class="ghost btn-xs sync-settings-btn" @click="openSyncSettings(inst)">⚙</button>
                 <button class="ghost btn-xs" @click="$emit('openDir', inst.skillPath)">{{ t("ide.openDir") }}</button>
                 <button class="ghost danger btn-xs" @click="$emit('uninstallSkill', inst.skillPath)">{{ t("ide.uninstall") }}</button>
               </div>
@@ -372,6 +443,65 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
         </div>
       </section>
     </div>
+
+    <!-- Sync Settings Popover -->
+    <Teleport to="body">
+      <div v-if="syncSettingsInst" class="popover-overlay" @click.self="closeSyncSettings">
+        <div class="sync-popover">
+          <div class="popover-title">{{ t("sync.editSettings") }}</div>
+          <div class="popover-inst-info">
+            <span class="popover-ide-name">{{ syncSettingsInst.ideLabel }}</span>
+            <span class="popover-path">{{ syncSettingsInst.skillPath }}</span>
+          </div>
+
+          <div class="popover-section">
+            <div class="popover-label">{{ t("installModal.syncBranch") }}</div>
+            <div class="popover-chips">
+              <button
+                v-for="b in builtinBranches"
+                :key="b"
+                class="branch-chip"
+                :class="{ active: syncEditBranch === b && syncEditMode === 'sync' }"
+                :disabled="syncEditMode === 'independent'"
+                @click="syncEditBranch = b"
+              >{{ b }}</button>
+              <button
+                class="branch-chip"
+                :class="{ active: syncEditBranch === '__custom__' && syncEditMode === 'sync' }"
+                :disabled="syncEditMode === 'independent'"
+                @click="syncEditBranch = '__custom__'"
+              >{{ t("installModal.customBranch") }}</button>
+            </div>
+            <input
+              v-if="syncEditBranch === '__custom__' && syncEditMode === 'sync'"
+              v-model="syncCustomBranch"
+              class="popover-input"
+              :placeholder="t('installModal.customBranchPlaceholder')"
+              @keydown.enter="confirmSyncSettings"
+            />
+          </div>
+
+          <div class="popover-section">
+            <div class="popover-label">{{ t("installModal.syncOptions") }}</div>
+            <div class="popover-mode-row">
+              <label class="mode-option" :class="{ active: syncEditMode === 'sync' }">
+                <input type="radio" v-model="syncEditMode" value="sync" />
+                {{ t("installModal.syncMode") }}
+              </label>
+              <label class="mode-option" :class="{ active: syncEditMode === 'independent' }">
+                <input type="radio" v-model="syncEditMode" value="independent" />
+                {{ t("installModal.independentMode") }}
+              </label>
+            </div>
+          </div>
+
+          <div class="popover-actions">
+            <button class="primary btn-sm" @click="confirmSyncSettings">{{ t("sync.confirm") }}</button>
+            <button class="ghost btn-sm" @click="closeSyncSettings">{{ t("sync.cancel") }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </main>
 </template>
 
@@ -666,5 +796,169 @@ const primarySyncInstallation = computed<LibraryIdeInstallation | null>(() =>
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
+}
+
+.sync-action-btn {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sync-action-btn.push {
+  background: var(--color-chip-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-chip-border);
+}
+.sync-action-btn.push:hover {
+  background: var(--color-chip-border);
+}
+.sync-action-btn.pull {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border: 1px solid var(--color-success-border);
+}
+.sync-action-btn.pull:hover {
+  opacity: 0.85;
+}
+.action-separator {
+  width: 1px;
+  height: 16px;
+  background: var(--color-card-border);
+  margin: 0 2px;
+}
+
+.sync-settings-btn {
+  font-size: 13px;
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.sync-settings-btn:hover {
+  opacity: 1;
+}
+
+/* Sync Settings Popover */
+.popover-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.15);
+}
+.sync-popover {
+  background: var(--color-panel-bg, #fff);
+  border: 1px solid var(--color-card-border);
+  border-radius: 12px;
+  padding: 20px;
+  width: 320px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.popover-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 12px;
+}
+.popover-inst-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 16px;
+  padding: 8px 10px;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+}
+.popover-ide-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.popover-path {
+  font-size: 11px;
+  color: var(--color-muted);
+  word-break: break-all;
+}
+.popover-section {
+  margin-bottom: 14px;
+}
+.popover-label {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-bottom: 6px;
+}
+.popover-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.branch-chip {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--color-card-border);
+  background: var(--color-card-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.branch-chip:hover:not(:disabled) {
+  border-color: var(--color-chip-border);
+}
+.branch-chip.active {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+}
+.branch-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.popover-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-card-border);
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--color-bg, #fff);
+  color: var(--color-text);
+  outline: none;
+}
+.popover-input:focus {
+  border-color: var(--color-success-border);
+}
+.popover-mode-row {
+  display: flex;
+  gap: 8px;
+}
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-card-border);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mode-option.active {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+}
+.mode-option input[type="radio"] {
+  accent-color: var(--color-success-text);
+}
+.popover-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
 }
 </style>

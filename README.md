@@ -34,7 +34,8 @@ As AI-powered coding agents multiply — Claude Code, Cursor, Codex, OpenCode, a
 
 - **Multi-IDE support** — Manage skills for Claude Code, Cursor, Codex, OpenCode, OpenClaw, and any custom IDE from a single app
 - **Unified skill library** — Three-column workspace: browse, inspect, and manage all your skills with search, filtering, and classification (Managed / Unmanaged / Plugin-Only)
-- **Multi-version tracking** — Each skill can have multiple versions with side-by-side diffs, similarity scores, named variants, and per-project version pinning
+- **Smart sync & version lines** — Three-way hash comparison tracks sync status with color-coded tags. Follow Updates or Copy Only mode, built-in version lines (`main`, `dev`, `stable`), push/pull/detach operations
+- **Multi-version tracking** — Each skill can have multiple versions with structured diff (title vs body vs resources), named variants, and per-project version pinning
 - **Per-project deployment** — Register projects, configure IDE targets, and deploy specific skill versions. Auto-detects existing skills and resolves conflicts
 - **Marketplace discovery** — Search and download from Claude Plugins, SkillsLLM, and SkillsMP in one interface, with automatic update detection
 - **Adopt unmanaged skills** — One-click import of manually placed skills into your managed repository
@@ -49,6 +50,47 @@ As AI-powered coding agents multiply — Claude Code, Cursor, Codex, OpenCode, a
 | IDE Browser | Projects |
 |:---:|:---:|
 | ![IDE Browser](docs/screenshots/en-US/ide.jpg) | ![Projects](docs/screenshots/en-US/project.jpg) |
+
+## Core Features
+
+### Multi-IDE Skill Management
+
+Every Agent IDE stores skills in its own directory. Qing Skill Manager reads them all, shows you exactly what's installed where, and lets you install, uninstall, or sync from one unified view. Natively supports **Claude Code, Cursor, Codex, OpenCode, OpenClaw** — and you can register any custom IDE in seconds.
+
+### Smart Sync & Version Lines
+
+Every installed skill tracks its sync status against the central repository using **three-way hash comparison** (central vs installed-at vs current). Status is shown as color-coded tags:
+
+- **Synced · main** (green) — up to date with central
+- **Update Available · main** (orange) — central has a newer version
+- **Modified · main** (blue) — local changes not yet pushed back
+- **Conflict · main** (red) — both sides changed independently
+
+Install skills in **Follow Updates** mode (default, tracks a version line) or **Copy Only** mode (independent, no tracking). Built-in version lines: `main`, `dev`, `stable` — plus custom names. Change sync settings anytime via the ⚙ button on each installation.
+
+Sync operations: **Push to Central** (send local changes back), **Pull Latest** (get the newest version), or **Stop Following** (switch to copy-only).
+
+### Multi-Version Skill Tracking
+
+Each skill can have **multiple versions** in your local repository. Compare any two versions side-by-side with **structured diff** (title vs body vs resource files — so you know if it's just a rename or a real content change). Set a default version, create named **variants** for different use cases (e.g. "concise" vs. "verbose"), and pin a specific version to a specific project. Version history tracks source (marketplace, project import, manual) and creation date.
+
+### Skill Library with Classification
+
+The three-column **Skill Library** is the main workspace:
+
+- **Left sidebar** — search, filter by platform (which IDE), filter by status (Managed / Unmanaged / Plugin-Only), sort by name or version count
+- **Center panel** — detailed view of the selected skill: description, path, installation status per IDE, project deployments, quick actions
+- **Right version rail** — full version history, default indicator, per-version IDE and project counts, rename/delete/compare/set-default actions
+
+Skills are classified as **Managed** (tracked in your repo), **Unmanaged** (found in an IDE but not in your repo), or **Plugin-Only**. Unmanaged skills can be imported and managed ("Import & Manage") into the central repo with one click.
+
+### Per-Project Skill Deployment
+
+Register your projects, configure which IDEs each project uses, and deploy specific skill versions. The app **auto-detects existing skills** in project directories and flags conflicts when a project's version differs from your repo. Conflict resolution offers three choices: **keep** the project version, **overwrite** with the repo version, or **coexist** (rename and keep both).
+
+### Marketplace Discovery
+
+Search skills from **Claude Plugins**, **SkillsLLM**, and **SkillsMP** in one interface. Downloaded skills go straight into your local repository, ready to be installed anywhere. Updates are detected automatically.
 
 ## Supported IDEs
 
@@ -73,10 +115,10 @@ Marketplace / Local folder
   (available everywhere)        (scoped to one project)
 ```
 
-1. **Collect** — Download from marketplaces, or import from local folders
-2. **Organize** — Browse your library, manage versions, create variants
-3. **Distribute** — Install globally to IDEs, or clone specific versions into projects
-4. **Maintain** — Track what's installed where, detect conflicts, and resolve them
+1. **Collect** — Download from marketplaces, or import from local folders. Everything lands in the central repository.
+2. **Organize** — Browse your library, manage versions, create variants, classify and filter.
+3. **Distribute** — Install globally to IDEs, or clone specific versions into specific projects. Choose sync mode and version line during install.
+4. **Sync** — The app tracks what's installed where with three-way hash comparison. Push local changes back to central, pull latest versions, or manage version lines — all from the ⚙ settings button.
 
 ## Quick Start
 
