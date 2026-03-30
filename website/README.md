@@ -25,7 +25,7 @@ pnpm build
 
 ## Deployment Target
 
-- Site: `https://qing-claw.github.io/qing-skill-manager`
+- Site: `https://hezi-ywt.github.io/qing-skill-manager`
 - Base path: `/qing-skill-manager`
 
 ## Attribution
